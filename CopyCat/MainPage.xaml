@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:CopyCat.ViewModels"
+             xmlns:models="clr-namespace:CopyCat.Models"
+             xmlns:conv="clr-namespace:CopyCat.Converters"
+             x:Class="CopyCat.MainPage"
+             x:DataType="vm:MainViewModel"
+             x:Name="ThisPage"
+             Title="CopyCat">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <!-- Colors are hardcoded here because ContentPage.Resources is parsed
+                 before app-level resources are injected — StaticResource cannot
+                 be used reliably at this stage. Values mirror Colors.xaml exactly. -->
+
+            <!-- Chip (file type / folder toggle) -->
+            <conv:BoolToColorConverter x:Key="ChipBorderConv"
+                                       TrueColor="#22C55E"
+                                       FalseColor="#2D2D4A" />
+            <conv:BoolToColorConverter x:Key="ChipBgConv"
+                                       TrueColor="#1A2E1A"
+                                       FalseColor="#13131F" />
+
+            <!-- Chunk button -->
+            <conv:BoolToColorConverter x:Key="ChunkBorderConv"
+                                       TrueColor="#22C55E"
+                                       FalseColor="#5B8EFF" />
+            <conv:BoolToColorConverter x:Key="ChunkBgConv"
+                                       TrueColor="#1A2E20"
+                                       FalseColor="#1A1A2E" />
+
+            <conv:InverseBoolConverter       x:Key="InverseBool" />
+            <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
+            <conv:BoolToStringConverter      x:Key="ExpandArrowConv"
+                                             TrueValue="▲"
+                                             FalseValue="▼" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView VerticalScrollBarVisibility="Default">
+        <VerticalStackLayout Padding="14,14,14,48" Spacing="0">
+
+            <!-- ══════════════════════════════════════════════════
+                 HEADER
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Grid ColumnDefinitions="56,*" ColumnSpacing="14">
+                    <Image Grid.Column="0"
+                           Source="copycat_logo.svg"
+                           HeightRequest="52"
+                           WidthRequest="52"
+                           VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="CopyCat"
+                               Style="{StaticResource HeaderTitle}" />
+                        <Label Text="GitHub → chunks → AI"
+                               Style="{StaticResource HeaderSubtitle}" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 REPOSITORY
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="0">
+                    <Label Text="REPOSITORY" Style="{StaticResource SectionTitle}" />
+
+                    <!-- GitHub URL + paste button -->
+                    <Label Text="GitHub URL" Style="{StaticResource FieldLabel}" />
+                    <Border Style="{StaticResource InputBorder}" Margin="0,0,0,10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Entry Grid.Column="0"
+                                   Style="{StaticResource InputEntry}"
+                                   Text="{Binding RepoUrl}"
+                                   Placeholder="https://github.com/owner/repo"
+                                   Keyboard="Url"
+                                   ReturnType="Next"
+                                   IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource IconBtn}"
+                                    Text="📋"
+                                    Command="{Binding PasteUrlCommand}"
+                                    ToolTipProperties.Text="Klistra in från urklipp"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Recent URLs -->
+                    <Label Text="SENASTE"
+                           Style="{StaticResource SectionTitle}"
+                           IsVisible="{Binding HasRecentUrls}"
+                           Margin="0,0,0,6" />
+                    <ScrollView Orientation="Horizontal"
+                                IsVisible="{Binding HasRecentUrls}"
+                                Margin="0,0,0,10"
+                                HorizontalScrollBarVisibility="Never">
+                        <FlexLayout Direction="Row" Wrap="NoWrap" AlignItems="Center">
+                            <BindableLayout.ItemsSource>
+                                <Binding Path="RecentUrls" />
+                            </BindableLayout.ItemsSource>
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource RecentUrlBorder}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SelectRecentUrlCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <Label Text="{Binding .}"
+                                               Style="{StaticResource RecentUrlLabel}"
+                                               WidthRequest="180" />
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                    </ScrollView>
+
+                    <!-- Branch -->
+                    <Label Text="Gren" Style="{StaticResource FieldLabel}" />
+                    <Border Style="{StaticResource InputBorder}" Margin="0,0,0,10">
+                        <Entry Style="{StaticResource InputEntry}"
+                               Text="{Binding Branch}"
+                               Placeholder="main"
+                               ReturnType="Next"
+                               IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                    </Border>
+
+                    <!-- Token -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <Label Grid.Column="0"
+                               Text="GitHub Token (privata repos)"
+                               Style="{StaticResource FieldLabel}"
+                               Margin="0"
+                               VerticalOptions="Center" />
+                        <Border Grid.Column="1"
+                                Style="{StaticResource SavedTokenBorder}"
+                                IsVisible="{Binding TokenIsSaved}">
+                            <Label Text="✓ Sparad"
+                                   TextColor="{StaticResource AccentGreen}"
+                                   FontSize="11"
+                                   FontAttributes="Bold" />
+                        </Border>
+                    </Grid>
+                    <Border Style="{StaticResource InputBorder}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Entry Grid.Column="0"
+                                   Style="{StaticResource InputEntry}"
+                                   Text="{Binding AccessToken}"
+                                   Placeholder="ghp_… (lämna tomt för publika repos)"
+                                   IsPassword="True"
+                                   ReturnType="Done"
+                                   IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource IconBtn}"
+                                    Text="🗑"
+                                    Command="{Binding ClearTokenCommand}"
+                                    IsVisible="{Binding TokenIsSaved}"
+                                    ToolTipProperties.Text="Rensa sparad token" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 FILE TYPES (expandable)
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="0">
+
+                    <!-- Expandable header -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0"
+                               Text="FILTYPER"
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0"
+                               VerticalOptions="Center" />
+                        <Label Grid.Column="1"
+                               Text="{Binding IsFileTypesExpanded, Converter={StaticResource ExpandArrowConv}}"
+                               TextColor="{StaticResource TextMuted}"
+                               FontSize="12"
+                               VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleFileTypesCommand}" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleFileTypesCommand}" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                    <!-- Chips -->
+                    <FlexLayout Wrap="Wrap"
+                                Direction="Row"
+                                JustifyContent="Start"
+                                IsVisible="{Binding IsFileTypesExpanded}">
+                        <BindableLayout.ItemsSource>
+                            <Binding Path="FileTypeFilters" />
+                        </BindableLayout.ItemsSource>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:FileTypeFilter">
+                                <Border Style="{StaticResource ChipBorder}"
+                                        BackgroundColor="{Binding IsEnabled, Converter={StaticResource ChipBgConv}}"
+                                        Stroke="{Binding IsEnabled, Converter={StaticResource ChipBorderConv}}">
+                                    <HorizontalStackLayout Spacing="4">
+                                        <CheckBox IsChecked="{Binding IsEnabled}"
+                                                  Color="{StaticResource AccentPrimary}"
+                                                  VerticalOptions="Center" />
+                                        <Label Text="{Binding Label}"
+                                               Style="{StaticResource ChipLabel}" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </FlexLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 EXCLUDED FOLDERS (expandable)
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="0">
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0"
+                               Text="EXKLUDERA MAPPAR"
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0"
+                               VerticalOptions="Center" />
+                        <Label Grid.Column="1"
+                               Text="{Binding IsFoldersExpanded, Converter={StaticResource ExpandArrowConv}}"
+                               TextColor="{StaticResource TextMuted}"
+                               FontSize="12"
+                               VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleFoldersCommand}" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleFoldersCommand}" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                    <FlexLayout Wrap="Wrap"
+                                Direction="Row"
+                                JustifyContent="Start"
+                                IsVisible="{Binding IsFoldersExpanded}">
+                        <BindableLayout.ItemsSource>
+                            <Binding Path="FolderFilters" />
+                        </BindableLayout.ItemsSource>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:FolderFilter">
+                                <Border Style="{StaticResource ChipBorder}"
+                                        BackgroundColor="{Binding IsExcluded, Converter={StaticResource ChipBgConv}}"
+                                        Stroke="{Binding IsExcluded, Converter={StaticResource ChipBorderConv}}">
+                                    <HorizontalStackLayout Spacing="4">
+                                        <CheckBox IsChecked="{Binding IsExcluded}"
+                                                  Color="{StaticResource AccentGreen}"
+                                                  VerticalOptions="Center" />
+                                        <Label Text="{Binding Name}"
+                                               Style="{StaticResource ChipLabel}" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </FlexLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 TOKEN SLIDER
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="0">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                        <Label Grid.Column="0"
+                               Text="MAX TOKENS / CHUNK"
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0"
+                               VerticalOptions="Center" />
+                        <Border Grid.Column="1" Style="{StaticResource TokenBadgeBorder}">
+                            <Label Text="{Binding MaxTokensLabel}"
+                                   Style="{StaticResource TokenBadgeLabel}" />
+                        </Border>
+                    </Grid>
+                    <Slider Minimum="1000"
+                            Maximum="30000"
+                            Value="{Binding MaxTokensPerChunk}"
+                            MinimumTrackColor="{StaticResource SliderTrackActive}"
+                            MaximumTrackColor="{StaticResource SliderTrackInactive}"
+                            ThumbColor="{StaticResource SliderThumb}"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                    <Grid ColumnDefinitions="*,*">
+                        <Label Grid.Column="0"
+                               Text="1 000"
+                               TextColor="{StaticResource TextDim}"
+                               FontSize="10" />
+                        <Label Grid.Column="1"
+                               Text="30 000"
+                               TextColor="{StaticResource TextDim}"
+                               FontSize="10"
+                               HorizontalOptions="End" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 FETCH BUTTON
+                 ══════════════════════════════════════════════════ -->
+            <Button Text="🐱  Hämta &amp; Chunka"
+                    Style="{StaticResource PrimaryBtn}"
+                    Command="{Binding FetchCommand}"
+                    Margin="0,0,0,8" />
+
+            <!-- Cancel / Reset -->
+            <Grid ColumnDefinitions="*,*"
+                  ColumnSpacing="8"
+                  Margin="0,0,0,12">
+                <Button Grid.Column="0"
+                        Text="⏹  Avbryt"
+                        Style="{StaticResource SecondaryBtn}"
+                        Command="{Binding CancelCommand}"
+                        IsVisible="{Binding IsBusy}" />
+                <Button Grid.Column="1"
+                        Text="🗑  Rensa"
+                        Style="{StaticResource SecondaryBtn}"
+                        Command="{Binding ResetCommand}"
+                        IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+            </Grid>
+
+            <!-- ══════════════════════════════════════════════════
+                 ACTIVITY INDICATOR (while busy)
+                 ══════════════════════════════════════════════════ -->
+            <VerticalStackLayout IsVisible="{Binding IsBusy}"
+                                 HorizontalOptions="Center"
+                                 Spacing="10"
+                                 Margin="0,0,0,10">
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   Color="{StaticResource ActivityIndicatorColor}"
+                                   HeightRequest="36"
+                                   WidthRequest="36"
+                                   HorizontalOptions="Center" />
+                <Label Text="{Binding StatusText}"
+                       TextColor="{StaticResource TextSecondary}"
+                       FontSize="14"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+
+            <!-- ══════════════════════════════════════════════════
+                 STATUS BAR (when not busy)
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource StatusBorder}"
+                    IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+                <Label Text="{Binding StatusText}"
+                       Style="{StaticResource StatusLabel}" />
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 ERROR PANEL
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource ErrorBorder}"
+                    IsVisible="{Binding HasError}">
+                <Grid ColumnDefinitions="28,*" ColumnSpacing="8">
+                    <Label Grid.Column="0"
+                           Text="⚠️"
+                           FontSize="18"
+                           VerticalOptions="Start" />
+                    <Label Grid.Column="1"
+                           Text="{Binding ErrorText}"
+                           Style="{StaticResource ErrorLabel}" />
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 SUMMARY STATS
+                 ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource SummaryBorder}"
+                    IsVisible="{Binding HasChunks}">
+                <Grid ColumnDefinitions="*,*,*,*">
+
+                    <VerticalStackLayout Grid.Column="0" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding TotalFiles}"
+                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="filer" Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding TotalProjects}"
+                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="projekt" Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding ChunkCount}"
+                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="chunks" Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="3" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding CopiedCount}"
+                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="kopierade" Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════
+                 CHUNK BUTTONS
+                 ══════════════════════════════════════════════════ -->
+            <VerticalStackLayout IsVisible="{Binding HasChunks}" Spacing="0">
+
+                <Label Text="CHUNKS  —  tryck för att kopiera"
+                       Style="{StaticResource SectionTitle}" />
+
+                <CollectionView ItemsSource="{Binding Chunks}"
+                                SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:CodeChunk">
+
+                            <Border Style="{StaticResource ChunkBorder}"
+                                    BackgroundColor="{Binding IsCopied, Converter={StaticResource ChunkBgConv}}"
+                                    Stroke="{Binding IsCopied, Converter={StaticResource ChunkBorderConv}}">
+
+                                <Grid ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto"
+                                      Padding="16,14">
+
+                                    <Label Grid.Row="0" Grid.Column="0"
+                                           Text="{Binding DisplayLabel}"
+                                           Style="{StaticResource ChunkTitleLabel}" />
+
+                                    <Label Grid.Row="1" Grid.Column="0"
+                                           Text="{Binding SubLabel}"
+                                           Style="{StaticResource ChunkSubLabel}" />
+
+                                    <Label Grid.Row="0" Grid.Column="1"
+                                           Grid.RowSpan="2"
+                                           Text="✓"
+                                           Style="{StaticResource ChunkCheckLabel}"
+                                           IsVisible="{Binding IsCopied}" />
+
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
+                                </Grid>
+
+                            </Border>
+
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
