@@ -3,41 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:CopyCat.ViewModels"
              xmlns:models="clr-namespace:CopyCat.Models"
-             xmlns:conv="clr-namespace:CopyCat.Converters"
              x:Class="CopyCat.MainPage"
              x:DataType="vm:MainViewModel"
              x:Name="ThisPage"
              Title="CopyCat">
 
-    <ContentPage.Resources>
-        <ResourceDictionary>
-            <!-- Colors are hardcoded here because ContentPage.Resources is parsed
-                 before app-level resources are injected — StaticResource cannot
-                 be used reliably at this stage. Values mirror Colors.xaml exactly. -->
-
-            <!-- Chip (file type / folder toggle) -->
-            <conv:BoolToColorConverter x:Key="ChipBorderConv"
-                                       TrueColor="#22C55E"
-                                       FalseColor="#2D2D4A" />
-            <conv:BoolToColorConverter x:Key="ChipBgConv"
-                                       TrueColor="#1A2E1A"
-                                       FalseColor="#13131F" />
-
-            <!-- Chunk button -->
-            <conv:BoolToColorConverter x:Key="ChunkBorderConv"
-                                       TrueColor="#22C55E"
-                                       FalseColor="#5B8EFF" />
-            <conv:BoolToColorConverter x:Key="ChunkBgConv"
-                                       TrueColor="#1A2E20"
-                                       FalseColor="#1A1A2E" />
-
-            <conv:InverseBoolConverter       x:Key="InverseBool" />
-            <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
-            <conv:BoolToStringConverter      x:Key="ExpandArrowConv"
-                                             TrueValue="▲"
-                                             FalseValue="▼" />
-        </ResourceDictionary>
-    </ContentPage.Resources>
+    <!-- No ContentPage.Resources needed — all converters and styles live in Styles.xaml -->
 
     <ScrollView VerticalScrollBarVisibility="Default">
         <VerticalStackLayout Padding="14,14,14,48" Spacing="0">
@@ -102,7 +73,7 @@
                                 <Binding Path="RecentUrls" />
                             </BindableLayout.ItemsSource>
                             <BindableLayout.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="{x:Type x:String}">
                                     <Border Style="{StaticResource RecentUrlBorder}">
                                         <Border.GestureRecognizers>
                                             <TapGestureRecognizer
@@ -170,7 +141,6 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="0">
 
-                    <!-- Expandable header -->
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Grid.Column="0"
                                Text="FILTYPER"
@@ -191,7 +161,6 @@
                         </Grid.GestureRecognizers>
                     </Grid>
 
-                    <!-- Chips -->
                     <FlexLayout Wrap="Wrap"
                                 Direction="Row"
                                 JustifyContent="Start"
@@ -312,7 +281,7 @@
             <!-- ══════════════════════════════════════════════════
                  FETCH BUTTON
                  ══════════════════════════════════════════════════ -->
-            <Button Text="🐱  Hämta &amp; Chunka"
+            <Button Text="Chunk"
                     Style="{StaticResource PrimaryBtn}"
                     Command="{Binding FetchCommand}"
                     Margin="0,0,0,8" />
@@ -322,12 +291,12 @@
                   ColumnSpacing="8"
                   Margin="0,0,0,12">
                 <Button Grid.Column="0"
-                        Text="⏹  Avbryt"
+                        Text="Abort"
                         Style="{StaticResource SecondaryBtn}"
                         Command="{Binding CancelCommand}"
                         IsVisible="{Binding IsBusy}" />
                 <Button Grid.Column="1"
-                        Text="🗑  Rensa"
+                        Text="Reset"
                         Style="{StaticResource SecondaryBtn}"
                         Command="{Binding ResetCommand}"
                         IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}" />

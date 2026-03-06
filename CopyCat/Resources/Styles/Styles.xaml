@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    xmlns:conv="clr-namespace:CopyCat.Converters"
+                    x:Class="CopyCat.Resources.Styles.Styles">
 
     <!-- ══════════════════════════════════════════════════════════
-         COLORS — all color keys defined first in the same file.
-         No cross-file StaticResource lookups anywhere below.
+         COLORS — defined first so every StaticResource below resolves.
          ══════════════════════════════════════════════════════════ -->
 
     <Color x:Key="BgApp">#111118</Color>
@@ -48,6 +49,33 @@
     <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
     <Color x:Key="SliderThumb">#7BACFF</Color>
     <Color x:Key="ActivityIndicatorColor">#5B8EFF</Color>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CONVERTERS — defined after colors so StaticResource resolves.
+         Placed here so MainPage.xaml needs no ContentPage.Resources block.
+         ══════════════════════════════════════════════════════════ -->
+
+    <!-- Chip (file type / folder toggle) -->
+    <conv:BoolToColorConverter x:Key="ChipBorderConv"
+                               TrueColor="{StaticResource BorderChipOn}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="ChipBgConv"
+                               TrueColor="{StaticResource BgChipOn}"
+                               FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Chunk button -->
+    <conv:BoolToColorConverter x:Key="ChunkBorderConv"
+                               TrueColor="{StaticResource BorderChunkCopied}"
+                               FalseColor="{StaticResource BorderChunkDefault}" />
+    <conv:BoolToColorConverter x:Key="ChunkBgConv"
+                               TrueColor="{StaticResource BgChunkCopied}"
+                               FalseColor="{StaticResource BgChunkDefault}" />
+
+    <conv:InverseBoolConverter       x:Key="InverseBool" />
+    <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
+    <conv:BoolToStringConverter      x:Key="ExpandArrowConv"
+                                     TrueValue="▲"
+                                     FalseValue="▼" />
 
     <!-- ══════════════════════════════════════════════════════════
          GLOBAL ELEMENT DEFAULTS

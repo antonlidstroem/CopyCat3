@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:styles="clr-namespace:CopyCat.Resources.Styles"
              x:Class="CopyCat.App">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+                <!--
+                    IMPORTANT: Styles.xaml has x:Class="CopyCat.Resources.Styles.Styles",
+                    which makes it a compiled class. A compiled ResourceDictionary MUST be
+                    merged by instantiating its type (like below), NOT via Source="...".
+                    Using Source="..." with an x:Class dictionary causes all StaticResource
+                    lookups to fail at runtime with "StaticResource not found".
+                -->
+                <styles:Styles />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

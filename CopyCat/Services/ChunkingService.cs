@@ -5,21 +5,18 @@ namespace CopyCat.Services;
 
 public class ChunkingService : IChunkingService
 {
-    private const double CharsPerToken  = 4.0;
-    private const string FileSeparator  = "\n\n";
+    private const double CharsPerToken = 4.0;
+    private const string FileSeparator = "\n\n";
 
-    // ── Token estimation ──────────────────────────────────────────────────────
     public int EstimateTokens(string text) =>
         (int)Math.Ceiling(text.Length / CharsPerToken);
 
-    // ── Public entry point ────────────────────────────────────────────────────
     public List<CodeChunk> CreateChunks(
         List<(string Path, string Content)> files,
         int maxTokensPerChunk)
     {
         if (files == null || files.Count == 0) return [];
 
-        // Group files by their detected project (csproj-based)
         var projectRoots = DetectProjectRoots(files);
 
         var grouped = files
@@ -27,7 +24,7 @@ public class ChunkingService : IChunkingService
             .OrderBy(g => g.Key)
             .ToList();
 
-        var allChunks  = new List<CodeChunk>();
+        var allChunks   = new List<CodeChunk>();
         int globalIndex = 0;
 
         foreach (var projectGroup in grouped)
@@ -35,14 +32,12 @@ public class ChunkingService : IChunkingService
             var projectFiles  = projectGroup.OrderBy(f => f.Path).ToList();
             var projectChunks = ChunkProjectFiles(
                 projectGroup.Key, projectFiles, maxTokensPerChunk, ref globalIndex);
-
             allChunks.AddRange(projectChunks);
         }
 
         return allChunks;
     }
 
-    // ── Project detection ─────────────────────────────────────────────────────
     private static List<(string Dir, string Name)> DetectProjectRoots(
         List<(string Path, string Content)> files)
     {
@@ -86,7 +81,6 @@ public class ChunkingService : IChunkingService
     private static string NormalDir(string dir) =>
         dir.Replace('\\', '/').TrimEnd('/');
 
-    // ── Chunking ───────────────────────────────────────────────────────────────
     private List<CodeChunk> ChunkProjectFiles(
         string projectName,
         List<(string Path, string Content)> files,
@@ -105,7 +99,6 @@ public class ChunkingService : IChunkingService
         {
             int sectionTokens = EstimateTokens(section);
 
-            // Section too large on its own — flush buffer then split by line
             if (sectionTokens > maxTokensPerChunk)
             {
                 if (buffer.Length > 0)
@@ -123,7 +116,6 @@ public class ChunkingService : IChunkingService
 
             int sepTokens = buffer.Length > 0 ? EstimateTokens(FileSeparator) : 0;
 
-            // Would overflow — flush
             if (bufferTokens + sepTokens + sectionTokens > maxTokensPerChunk
                 && buffer.Length > 0)
             {
@@ -164,8 +156,24 @@ public class ChunkingService : IChunkingService
 
         foreach (var line in lines)
         {
-            var lineWithNl  = line + "\n";
-            int lineTokens  = EstimateTokens(lineWithNl);
+            var lineWithNl = line + "\n";
+            int lineTokens = EstimateTokens(lineWithNl);
+
+            // A single line is longer than the whole chunk budget (e.g. minified file).
+            // Split at character level to honour the token contract.
+            if (lineTokens > maxTokensPerChunk)
+            {
+                if (buffer.Length > 0)
+                {
+                    result.Add(Finalize(globalIndex++, projectName, buffer.ToString(), tokens));
+                    buffer.Clear();
+                    tokens = 0;
+                }
+
+                result.AddRange(
+                    SplitLongLine(projectName, lineWithNl, maxTokensPerChunk, ref globalIndex));
+                continue;
+            }
 
             if (tokens + lineTokens > maxTokensPerChunk && buffer.Length > 0)
             {
@@ -184,7 +192,32 @@ public class ChunkingService : IChunkingService
         return result;
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Last-resort split: a single line exceeds the token budget.
+    /// Split at character boundaries (maxTokensPerChunk * CharsPerToken chars per chunk).
+    /// </summary>
+    private List<CodeChunk> SplitLongLine(
+        string projectName,
+        string line,
+        int    maxTokensPerChunk,
+        ref int globalIndex)
+    {
+        var result    = new List<CodeChunk>();
+        int maxChars  = (int)(maxTokensPerChunk * CharsPerToken);
+        int offset    = 0;
+
+        while (offset < line.Length)
+        {
+            int length  = Math.Min(maxChars, line.Length - offset);
+            var segment = line.Substring(offset, length);
+            result.Add(Finalize(globalIndex++, projectName,
+                segment, EstimateTokens(segment)));
+            offset += length;
+        }
+
+        return result;
+    }
+
     private static string BuildSection(string path, string content)
     {
         var sb = new StringBuilder();

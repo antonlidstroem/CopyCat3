@@ -5,15 +5,12 @@ namespace CopyCat.Services;
 
 public class GitHubService : IGitHubService
 {
-    // Single static HttpClient — handles redirects (needed for private-repo API calls)
-    private static readonly HttpClient _http = new(new HttpClientHandler
+    private readonly IHttpClientFactory _httpFactory;
+
+    public GitHubService(IHttpClientFactory httpFactory)
     {
-        AllowAutoRedirect    = true,
-        MaxAutomaticRedirections = 5
-    })
-    {
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+        _httpFactory = httpFactory;
+    }
 
     public async Task<List<(string Path, string Content)>> FetchFilesAsync(
         string              repoUrl,
@@ -38,23 +35,25 @@ public class GitHubService : IGitHubService
 
         progress?.Report($"Ansluter till {owner}/{repo}…");
 
-        // Build branch candidates — try the specified branch first, then fallbacks
-        var candidates = string.IsNullOrWhiteSpace(branch)
+        // Build candidate branch list — preferred branch first, then fallbacks.
+        var trimmedBranch = branch.Trim();
+        var candidates = string.IsNullOrWhiteSpace(trimmedBranch)
             ? new[] { "main", "master", "develop" }
-            : (new[] { branch.Trim() })
+            : new[] { trimmedBranch }
               .Concat(new[] { "main", "master", "develop" }
-                  .Where(b => !b.Equals(branch.Trim(), StringComparison.OrdinalIgnoreCase)))
+                  .Where(b => !b.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase)))
               .ToArray();
 
         byte[]? zipBytes   = null;
         string? usedBranch = null;
 
+        // Use a new HttpClient instance per request (IHttpClientFactory manages pooling).
+        var http = _httpFactory.CreateClient("github");
+
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // ── Public repos: direct zip download (no rate limit) ──────────
-            // ── Private repos: GitHub API zipball (auth required)    ──────────
             var url = useApi
                 ? $"https://api.github.com/repos/{owner}/{repo}/zipball/{candidate}"
                 : $"https://github.com/{owner}/{repo}/archive/refs/heads/{candidate}.zip";
@@ -64,17 +63,14 @@ public class GitHubService : IGitHubService
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-
                 if (useApi)
                 {
-                    // Per-request auth so the static HttpClient doesn't leak credentials
                     request.Headers.Authorization =
                         new AuthenticationHeaderValue("token", accessToken);
-                    request.Headers.UserAgent.ParseAdd("CopyCat/1.0");
                     request.Headers.Accept.ParseAdd("application/vnd.github+json");
                 }
 
-                var response = await _http.SendAsync(
+                var response = await http.SendAsync(
                     request,
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken);
@@ -98,14 +94,27 @@ public class GitHubService : IGitHubService
             catch (InvalidOperationException)  { throw; }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Nätverksfel: {ex.Message}");
+                // Preserve inner exception so stack trace is not lost.
+                throw new InvalidOperationException($"Nätverksfel: {ex.Message}", ex);
             }
         }
 
         if (zipBytes is null)
             throw new InvalidOperationException(
-                $"Repot '{owner}/{repo}' hittades inte på gren '{branch}'. " +
+                $"Repot '{owner}/{repo}' hittades inte på någon gren " +
+                $"(provade: {string.Join(", ", candidates)}). " +
                 "Kontrollera URL och grennamn.");
+
+        // Warn if a fallback branch was used instead of the one the user specified.
+        if (!string.IsNullOrWhiteSpace(trimmedBranch) &&
+            !usedBranch!.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase))
+        {
+            progress?.Report(
+                $"⚠️ Gren '{trimmedBranch}' hittades inte — använde '{usedBranch}' istället.");
+
+            // Small pause so the user has a chance to read the warning.
+            await Task.Delay(1500, cancellationToken);
+        }
 
         progress?.Report("Packar upp och filtrerar…");
 
@@ -120,15 +129,12 @@ public class GitHubService : IGitHubService
 
             if (entry.FullName.EndsWith('/')) continue;
 
-            // Strip the top-level archive folder (e.g. "repo-main/")
             var slash        = entry.FullName.IndexOf('/');
             var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
-            if (string.IsNullOrEmpty(relativePath)) continue;
 
-            // Skip excluded folders
-            if (IsInExcludedFolder(relativePath, excludedSet)) continue;
+            if (string.IsNullOrEmpty(relativePath))               continue;
+            if (IsInExcludedFolder(relativePath, excludedSet))    continue;
 
-            // Skip unwanted extensions
             var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
             if (!extSet.Contains(ext)) continue;
 
@@ -153,9 +159,6 @@ public class GitHubService : IGitHubService
         return results.OrderBy(f => f.Path).ToList();
     }
 
-    /// <summary>
-    /// Returns true if any path segment (excluding the filename) matches an excluded folder name.
-    /// </summary>
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {
         var parts = relativePath.Replace('\\', '/').Split('/');

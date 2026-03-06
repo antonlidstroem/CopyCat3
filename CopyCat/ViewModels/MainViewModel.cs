@@ -2,20 +2,27 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CopyCat.Models;
 using CopyCat.Services;
+using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace CopyCat.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
-    // ── Dependencies ──────────────────────────────────────────────────────────
     private readonly IGitHubService    _gitHubService;
     private readonly IChunkingService  _chunkingService;
     private readonly IClipboardService _clipboard;
-    private CancellationTokenSource?   _cts;
-    private bool                       _initialized;
+    private readonly ILogger<MainViewModel> _logger;
 
-    // ── Repository ────────────────────────────────────────────────────────────
+    private CancellationTokenSource? _cts;
+    private bool                     _initialized;
+    private bool                     _disposed;
+
+    // Stored handler references so we can unsubscribe in Dispose().
+    private readonly List<(FileTypeFilter Filter, PropertyChangedEventHandler Handler)>
+        _fileTypeHandlers = [];
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
     private string _repoUrl = string.Empty;
@@ -29,14 +36,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _tokenIsSaved;
 
-    // ── Section expand/collapse ────────────────────────────────────────────────
     [ObservableProperty]
     private bool _isFileTypesExpanded = true;
 
     [ObservableProperty]
     private bool _isFoldersExpanded;
 
-    // ── Token slider ──────────────────────────────────────────────────────────
     [ObservableProperty]
     private double _maxTokensPerChunk = 10000;
 
@@ -45,7 +50,6 @@ public partial class MainViewModel : ObservableObject
     partial void OnMaxTokensPerChunkChanged(double value) =>
         OnPropertyChanged(nameof(MaxTokensLabel));
 
-    // ── State ─────────────────────────────────────────────────────────────────
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
     private bool _isBusy;
@@ -77,7 +81,6 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private int _copiedCount;
 
-    // ── Collections ───────────────────────────────────────────────────────────
     public ObservableCollection<CodeChunk>      Chunks          { get; } = [];
     public ObservableCollection<FileTypeFilter> FileTypeFilters { get; } = [];
     public ObservableCollection<FolderFilter>   FolderFilters   { get; } = [];
@@ -85,15 +88,16 @@ public partial class MainViewModel : ObservableObject
 
     public bool HasRecentUrls => RecentUrls.Count > 0;
 
-    // ── Constructor ───────────────────────────────────────────────────────────
     public MainViewModel(
-        IGitHubService    gitHubService,
-        IChunkingService  chunkingService,
-        IClipboardService clipboard)
+        IGitHubService         gitHubService,
+        IChunkingService       chunkingService,
+        IClipboardService      clipboard,
+        ILogger<MainViewModel> logger)
     {
         _gitHubService   = gitHubService;
         _chunkingService = chunkingService;
         _clipboard       = clipboard;
+        _logger          = logger;
 
         InitFileTypeFilters();
         InitFolderFilters();
@@ -101,13 +105,12 @@ public partial class MainViewModel : ObservableObject
         RecentUrls.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentUrls));
     }
 
-    // ── Initialization (called from MainPage.OnAppearing) ─────────────────────
     public async Task InitializeAsync()
     {
         if (_initialized) return;
         _initialized = true;
 
-        // Load saved GitHub token from secure storage
+        // Load saved token — log failures instead of swallowing them silently.
         try
         {
             var token = await SecureStorage.Default.GetAsync("github_token");
@@ -117,20 +120,29 @@ public partial class MainViewModel : ObservableObject
                 TokenIsSaved = true;
             }
         }
-        catch { /* SecureStorage unavailable on some platforms/emulators */ }
-
-        // Load recent URLs from Preferences
-        var recents = Preferences.Default.Get("recent_urls", string.Empty);
-        if (!string.IsNullOrWhiteSpace(recents))
+        catch (Exception ex)
         {
-            foreach (var url in recents.Split('|')
-                         .Where(u => !string.IsNullOrWhiteSpace(u))
-                         .Take(5))
-                RecentUrls.Add(url);
+            _logger.LogWarning(ex, "Kunde inte läsa GitHub-token från SecureStorage.");
+        }
+
+        // Load recent URLs.
+        try
+        {
+            var recents = Preferences.Default.Get("recent_urls", string.Empty);
+            if (!string.IsNullOrWhiteSpace(recents))
+            {
+                foreach (var url in recents.Split('|')
+                             .Where(u => !string.IsNullOrWhiteSpace(u))
+                             .Take(5))
+                    RecentUrls.Add(url);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kunde inte läsa senaste URL:er från Preferences.");
         }
     }
 
-    // ── Filter setup ──────────────────────────────────────────────────────────
     private void InitFileTypeFilters()
     {
         var filters = new[]
@@ -154,7 +166,11 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var f in filters)
         {
-            f.PropertyChanged += (_, _) => FetchCommand.NotifyCanExecuteChanged();
+            // Store handler reference so we can unsubscribe in Dispose().
+            PropertyChangedEventHandler handler =
+                (_, _) => FetchCommand.NotifyCanExecuteChanged();
+            f.PropertyChanged += handler;
+            _fileTypeHandlers.Add((f, handler));
             FileTypeFilters.Add(f);
         }
     }
@@ -172,7 +188,6 @@ public partial class MainViewModel : ObservableObject
             FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private bool CanFetch() =>
         !IsBusy &&
         !string.IsNullOrWhiteSpace(RepoUrl) &&
@@ -199,10 +214,15 @@ public partial class MainViewModel : ObservableObject
         while (RecentUrls.Count > 5)
             RecentUrls.RemoveAt(RecentUrls.Count - 1);
 
-        Preferences.Default.Set("recent_urls", string.Join("|", RecentUrls));
+        try
+        {
+            Preferences.Default.Set("recent_urls", string.Join("|", RecentUrls));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kunde inte spara senaste URL:er i Preferences.");
+        }
     }
-
-    // ── Commands ──────────────────────────────────────────────────────────────
 
     [RelayCommand(CanExecute = nameof(CanFetch))]
     private async Task FetchAsync()
@@ -211,11 +231,11 @@ public partial class MainViewModel : ObservableObject
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
-        IsBusy       = true;
-        HasError     = false;
-        ErrorText    = string.Empty;
-        HasChunks    = false;
-        CopiedCount  = 0;
+        IsBusy      = true;
+        HasError    = false;
+        ErrorText   = string.Empty;
+        HasChunks   = false;
+        CopiedCount = 0;
         Chunks.Clear();
         ChunkCount = 0;
 
@@ -256,7 +276,6 @@ public partial class MainViewModel : ObservableObject
 
             SaveRecentUrl(RepoUrl.Trim());
 
-            // Persist token if one was provided
             if (!string.IsNullOrWhiteSpace(AccessToken))
             {
                 try
@@ -264,7 +283,10 @@ public partial class MainViewModel : ObservableObject
                     await SecureStorage.Default.SetAsync("github_token", AccessToken);
                     TokenIsSaved = true;
                 }
-                catch { /* ignore on platforms without SecureStorage */ }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Kunde inte spara GitHub-token i SecureStorage.");
+                }
             }
         }
         catch (OperationCanceledException)
@@ -273,9 +295,10 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            HasError  = true;
-            ErrorText = ex.Message;
+            HasError   = true;
+            ErrorText  = ex.Message;
             StatusText = "Fel — se meddelande nedan.";
+            _logger.LogError(ex, "Fel vid hämtning av repo.");
         }
         finally
         {
@@ -298,8 +321,9 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            HasError  = true;
-            ErrorText = $"Kunde inte kopiera: {ex.Message}";
+            // Copy errors are transient — show as status text, not a persistent error panel.
+            StatusText = $"⚠️ Kunde inte kopiera: {ex.Message}";
+            _logger.LogWarning(ex, "Kunde inte kopiera chunk till urklipp.");
         }
     }
 
@@ -329,7 +353,12 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ClearToken()
     {
-        try { SecureStorage.Default.Remove("github_token"); } catch { }
+        try   { SecureStorage.Default.Remove("github_token"); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kunde inte ta bort GitHub-token från SecureStorage.");
+        }
+
         AccessToken  = string.Empty;
         TokenIsSaved = false;
     }
@@ -354,4 +383,23 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleFolders() => IsFoldersExpanded = !IsFoldersExpanded;
+
+    // ── IDisposable ────────────────────────────────────────────────────────────
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // Cancel and dispose any in-flight request.
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+
+        // Unsubscribe all FileTypeFilter event handlers to prevent ghost subscriptions.
+        foreach (var (filter, handler) in _fileTypeHandlers)
+            filter.PropertyChanged -= handler;
+
+        _fileTypeHandlers.Clear();
+    }
 }
