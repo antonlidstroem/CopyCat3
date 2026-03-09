@@ -1,11 +1,17 @@
+using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 
 namespace CopyCat.Services;
 
 public class GitHubService : IGitHubService
 {
     private readonly IHttpClientFactory _httpFactory;
+
+    // Cache compiled glob→regex conversions so we don't recompile on every file.
+    // Key: glob pattern string. Value: compiled Regex.
+    private static readonly ConcurrentDictionary<string, Regex> GlobCache = new();
 
     public GitHubService(IHttpClientFactory httpFactory)
     {
@@ -18,6 +24,7 @@ public class GitHubService : IGitHubService
         string?             accessToken,
         string              branch,
         IEnumerable<string> excludedFolders,
+        IEnumerable<string> excludedFilePatterns,
         IProgress<string>?  progress          = null,
         CancellationToken   cancellationToken = default)
     {
@@ -31,11 +38,15 @@ public class GitHubService : IGitHubService
             .Select(f => f.ToLowerInvariant().Trim('/'))
             .ToHashSet();
 
+        // Materialise once; filter out blank/null entries defensively.
+        var patternList = excludedFilePatterns
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
         bool useApi = !string.IsNullOrWhiteSpace(accessToken);
 
         progress?.Report($"Ansluter till {owner}/{repo}…");
 
-        // Build candidate branch list — preferred branch first, then fallbacks.
         var trimmedBranch = branch.Trim();
         var candidates = string.IsNullOrWhiteSpace(trimmedBranch)
             ? new[] { "main", "master", "develop" }
@@ -47,7 +58,6 @@ public class GitHubService : IGitHubService
         byte[]? zipBytes   = null;
         string? usedBranch = null;
 
-        // Use a new HttpClient instance per request (IHttpClientFactory manages pooling).
         var http = _httpFactory.CreateClient("github");
 
         foreach (var candidate in candidates)
@@ -94,7 +104,6 @@ public class GitHubService : IGitHubService
             catch (InvalidOperationException)  { throw; }
             catch (Exception ex)
             {
-                // Preserve inner exception so stack trace is not lost.
                 throw new InvalidOperationException($"Nätverksfel: {ex.Message}", ex);
             }
         }
@@ -105,14 +114,11 @@ public class GitHubService : IGitHubService
                 $"(provade: {string.Join(", ", candidates)}). " +
                 "Kontrollera URL och grennamn.");
 
-        // Warn if a fallback branch was used instead of the one the user specified.
         if (!string.IsNullOrWhiteSpace(trimmedBranch) &&
             !usedBranch!.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase))
         {
             progress?.Report(
                 $"⚠️ Gren '{trimmedBranch}' hittades inte — använde '{usedBranch}' istället.");
-
-            // Small pause so the user has a chance to read the warning.
             await Task.Delay(1500, cancellationToken);
         }
 
@@ -132,11 +138,15 @@ public class GitHubService : IGitHubService
             var slash        = entry.FullName.IndexOf('/');
             var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
 
-            if (string.IsNullOrEmpty(relativePath))               continue;
-            if (IsInExcludedFolder(relativePath, excludedSet))    continue;
+            if (string.IsNullOrEmpty(relativePath))                       continue;
+            if (IsInExcludedFolder(relativePath, excludedSet))            continue;
 
             var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
-            if (!extSet.Contains(ext)) continue;
+            if (!extSet.Contains(ext))                                    continue;
+
+            // Skip files whose name matches any enabled glob pattern.
+            if (patternList.Count > 0 &&
+                patternList.Any(p => MatchesGlob(entry.Name, p)))         continue;
 
             try
             {
@@ -153,11 +163,13 @@ public class GitHubService : IGitHubService
         if (results.Count == 0)
             throw new InvalidOperationException(
                 "Inga filer hittades med de valda filtyperna. " +
-                "Kontrollera att du valt rätt filtyper och att mappfiltren inte blockerar allt.");
+                "Kontrollera att du valt rätt filtyper och att filtren inte blockerar allt.");
 
         progress?.Report($"Klart! {results.Count} filer från '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
+
+    // ── Helpers ──────────────────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {
@@ -168,5 +180,27 @@ public class GitHubService : IGitHubService
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Matches a file name against a glob pattern supporting * (any chars) and
+    /// ? (single char), case-insensitive.
+    ///
+    /// Compiled Regex instances are cached in GlobCache so each unique pattern
+    /// is only compiled once across the entire fetch operation.
+    /// </summary>
+    private static bool MatchesGlob(string fileName, string pattern)
+    {
+        var regex = GlobCache.GetOrAdd(pattern, p =>
+        {
+            var regexStr = "^" +
+                Regex.Escape(p)
+                     .Replace("\\*", ".*")
+                     .Replace("\\?", ".") +
+                "$";
+            return new Regex(regexStr, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        });
+
+        return regex.IsMatch(fileName);
     }
 }

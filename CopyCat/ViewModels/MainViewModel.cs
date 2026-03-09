@@ -1,25 +1,23 @@
+using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CopyCat.Models;
 using CopyCat.Services;
 using Microsoft.Extensions.Logging;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 
 namespace CopyCat.ViewModels;
 
 public partial class MainViewModel : ObservableObject, IDisposable
 {
-    private readonly IGitHubService    _gitHubService;
-    private readonly IChunkingService  _chunkingService;
+    private readonly IGitHubService _gitHubService;
+    private readonly IChunkingService _chunkingService;
     private readonly IClipboardService _clipboard;
     private readonly ILogger<MainViewModel> _logger;
-
     private CancellationTokenSource? _cts;
-    private bool                     _initialized;
-    private bool                     _disposed;
-
-    // Stored handler references so we can unsubscribe in Dispose().
+    private bool _initialized;
+    private bool _disposed;
     private readonly List<(FileTypeFilter Filter, PropertyChangedEventHandler Handler)>
         _fileTypeHandlers = [];
 
@@ -31,7 +29,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _accessToken = string.Empty;
 
     [ObservableProperty]
-    private string _branch = "main";
+    private string _branch = "master";
 
     [ObservableProperty]
     private bool _tokenIsSaved;
@@ -43,10 +41,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isFoldersExpanded;
 
     [ObservableProperty]
+    private bool _isPatternsExpanded;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddFolderCommand))]
+    private string _newFolderName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddPatternCommand))]
+    private string _newPatternName = string.Empty;
+
+    [ObservableProperty]
     private double _maxTokensPerChunk = 10000;
-
     public string MaxTokensLabel => $"{MaxTokensPerChunk:N0}";
-
     partial void OnMaxTokensPerChunkChanged(double value) =>
         OnPropertyChanged(nameof(MaxTokensLabel));
 
@@ -81,27 +88,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _copiedCount;
 
-    public ObservableCollection<CodeChunk>      Chunks          { get; } = [];
+    public ObservableCollection<CodeChunk> Chunks { get; } = [];
     public ObservableCollection<FileTypeFilter> FileTypeFilters { get; } = [];
-    public ObservableCollection<FolderFilter>   FolderFilters   { get; } = [];
-    public ObservableCollection<string>         RecentUrls      { get; } = [];
-
+    public ObservableCollection<FolderFilter> FolderFilters { get; } = [];
+    public ObservableCollection<FilePatternFilter> FilePatternFilters { get; } = [];
+    public ObservableCollection<string> RecentUrls { get; } = [];
     public bool HasRecentUrls => RecentUrls.Count > 0;
 
     public MainViewModel(
-        IGitHubService         gitHubService,
-        IChunkingService       chunkingService,
-        IClipboardService      clipboard,
+        IGitHubService gitHubService,
+        IChunkingService chunkingService,
+        IClipboardService clipboard,
         ILogger<MainViewModel> logger)
     {
-        _gitHubService   = gitHubService;
+        _gitHubService = gitHubService;
         _chunkingService = chunkingService;
-        _clipboard       = clipboard;
-        _logger          = logger;
-
+        _clipboard = clipboard;
+        _logger = logger;
         InitFileTypeFilters();
         InitFolderFilters();
-
+        InitPatternFilters();
         RecentUrls.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentUrls));
     }
 
@@ -109,14 +115,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_initialized) return;
         _initialized = true;
-
-        // Load saved token — log failures instead of swallowing them silently.
         try
         {
             var token = await SecureStorage.Default.GetAsync("github_token");
             if (!string.IsNullOrWhiteSpace(token))
             {
-                AccessToken  = token;
+                AccessToken = token;
                 TokenIsSaved = true;
             }
         }
@@ -124,8 +128,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             _logger.LogWarning(ex, "Kunde inte läsa GitHub-token från SecureStorage.");
         }
-
-        // Load recent URLs.
         try
         {
             var recents = Preferences.Default.Get("recent_urls", string.Empty);
@@ -142,6 +144,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _logger.LogWarning(ex, "Kunde inte läsa senaste URL:er från Preferences.");
         }
     }
+
+    // ── Init ─────────────────────────────────────────────────────────
 
     private void InitFileTypeFilters()
     {
@@ -163,10 +167,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             new FileTypeFilter { Label = ".sql",    Extensions = [".sql"],          IsEnabled = false },
             new FileTypeFilter { Label = ".yaml",   Extensions = [".yaml", ".yml"], IsEnabled = false },
         };
-
         foreach (var f in filters)
         {
-            // Store handler reference so we can unsubscribe in Dispose().
             PropertyChangedEventHandler handler =
                 (_, _) => FetchCommand.NotifyCanExecuteChanged();
             f.PropertyChanged += handler;
@@ -183,15 +185,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
             "packages", "dist", "build", ".idea",
             "__pycache__", ".gradle", "out", ".next"
         };
-
         foreach (var name in defaults)
             FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
     }
+
+    private void InitPatternFilters()
+    {
+        var defaults = new[]
+        {
+            "*.Designer.cs",
+            "*.g.cs",
+            "*.g.i.cs",
+            "*.AssemblyInfo.cs",
+        };
+        foreach (var pattern in defaults)
+            FilePatternFilters.Add(new FilePatternFilter { Pattern = pattern, IsEnabled = true });
+    }
+
+    // ── CanExecute ───────────────────────────────────────────────────
 
     private bool CanFetch() =>
         !IsBusy &&
         !string.IsNullOrWhiteSpace(RepoUrl) &&
         FileTypeFilters.Any(f => f.IsEnabled);
+
+    private bool CanAddFolder() => !string.IsNullOrWhiteSpace(NewFolderName);
+    private bool CanAddPattern() => !string.IsNullOrWhiteSpace(NewPatternName);
+
+    // ── Data helpers ─────────────────────────────────────────────────
 
     private List<string> GetSelectedExtensions() =>
         FileTypeFilters
@@ -204,16 +225,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
             .Where(f => f.IsExcluded)
             .Select(f => f.Name);
 
+    private IEnumerable<string> GetExcludedPatterns() =>
+        FilePatternFilters
+            .Where(f => f.IsEnabled)
+            .Select(f => f.Pattern);
+
     private void SaveRecentUrl(string url)
     {
         if (RecentUrls.Contains(url))
             RecentUrls.Remove(url);
-
         RecentUrls.Insert(0, url);
-
         while (RecentUrls.Count > 5)
             RecentUrls.RemoveAt(RecentUrls.Count - 1);
-
         try
         {
             Preferences.Default.Set("recent_urls", string.Join("|", RecentUrls));
@@ -224,6 +247,88 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ── Folder commands ───────────────────────────────────────────────
+
+    [RelayCommand(CanExecute = nameof(CanAddFolder))]
+    private void AddFolder()
+    {
+        var name = NewFolderName.Trim().Trim('/').ToLowerInvariant();
+        if (string.IsNullOrEmpty(name)) return;
+        if (FolderFilters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            NewFolderName = string.Empty;
+            return;
+        }
+        FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
+        NewFolderName = string.Empty;
+    }
+
+    [RelayCommand]
+    private void RemoveFolder(FolderFilter folder)
+    {
+        if (folder is not null)
+            FolderFilters.Remove(folder);
+    }
+
+    [RelayCommand]
+    private void ToggleFolders() => IsFoldersExpanded = !IsFoldersExpanded;
+
+    // ── Pattern commands ──────────────────────────────────────────────
+
+    [RelayCommand(CanExecute = nameof(CanAddPattern))]
+    private void AddPattern()
+    {
+        var pattern = NewPatternName.Trim();
+        if (string.IsNullOrEmpty(pattern)) return;
+        if (FilePatternFilters.Any(f =>
+                string.Equals(f.Pattern, pattern, StringComparison.OrdinalIgnoreCase)))
+        {
+            NewPatternName = string.Empty;
+            return;
+        }
+        FilePatternFilters.Add(new FilePatternFilter { Pattern = pattern, IsEnabled = true });
+        NewPatternName = string.Empty;
+    }
+
+    [RelayCommand]
+    private void RemovePattern(FilePatternFilter pattern)
+    {
+        if (pattern is not null)
+            FilePatternFilters.Remove(pattern);
+    }
+
+    [RelayCommand]
+    private void TogglePatterns() => IsPatternsExpanded = !IsPatternsExpanded;
+
+    // ── Preview command ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Shows a dialog listing the files contained in the given chunk.
+    ///
+    /// Uses Application.Current.MainPage.DisplayAlert — NOT Shell.Current —
+    /// because this app uses NavigationPage, not Shell. Shell.Current is null.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowPreviewAsync(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+
+        var files = chunk.FileNames;
+        var message = files.Count > 0
+            ? string.Join("\n", files)
+            : "(inga filer)";
+
+        var page = Application.Current?.MainPage;
+        if (page is null) return;
+
+        await page.DisplayAlert(
+            $"Chunk {chunk.Index + 1} · {chunk.ProjectName}",
+            message,
+            "Stäng");
+    }
+
+    // ── Fetch ─────────────────────────────────────────────────────────
+
     [RelayCommand(CanExecute = nameof(CanFetch))]
     private async Task FetchAsync()
     {
@@ -231,19 +336,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
-        IsBusy      = true;
-        HasError    = false;
-        ErrorText   = string.Empty;
-        HasChunks   = false;
+        IsBusy = true;
+        HasError = false;
+        ErrorText = string.Empty;
+        HasChunks = false;
         CopiedCount = 0;
         Chunks.Clear();
         ChunkCount = 0;
 
         try
         {
-            var extensions      = GetSelectedExtensions();
+            var extensions = GetSelectedExtensions();
             var excludedFolders = GetExcludedFolders().ToList();
-            var progress        = new Progress<string>(msg => StatusText = msg);
+            var excludedPatterns = GetExcludedPatterns().ToList();
+            var progress = new Progress<string>(msg => StatusText = msg);
 
             var files = await _gitHubService.FetchFilesAsync(
                 RepoUrl.Trim(),
@@ -251,6 +357,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 AccessToken,
                 Branch,
                 excludedFolders,
+                excludedPatterns,
                 progress,
                 _cts.Token);
 
@@ -261,15 +368,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 () => _chunkingService.CreateChunks(files, (int)MaxTokensPerChunk),
                 _cts.Token);
 
-            TotalTokens   = chunks.Sum(c => c.EstimatedTokens);
+            TotalTokens = chunks.Sum(c => c.EstimatedTokens);
             TotalProjects = chunks.Select(c => c.ProjectName).Distinct().Count();
 
             foreach (var chunk in chunks)
                 Chunks.Add(chunk);
 
             ChunkCount = Chunks.Count;
-            HasChunks  = ChunkCount > 0;
-
+            HasChunks = ChunkCount > 0;
             StatusText =
                 $"✅  {files.Count} filer · {TotalProjects} projekt · " +
                 $"{ChunkCount} chunks · ~{TotalTokens:N0} tokens";
@@ -295,8 +401,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            HasError   = true;
-            ErrorText  = ex.Message;
+            HasError = true;
+            ErrorText = ex.Message;
             StatusText = "Fel — se meddelande nedan.";
             _logger.LogError(ex, "Fel vid hämtning av repo.");
         }
@@ -317,13 +423,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             await _clipboard.SetTextAsync(chunk.Content);
             chunk.IsCopied = true;
-            CopiedCount    = Chunks.Count(c => c.IsCopied);
+            CopiedCount = Chunks.Count(c => c.IsCopied);
         }
         catch (Exception ex)
         {
-            // Copy errors are transient — show as status text, not a persistent error panel.
             StatusText = $"⚠️ Kunde inte kopiera: {ex.Message}";
             _logger.LogWarning(ex, "Kunde inte kopiera chunk till urklipp.");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShareChunkAsync(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        try
+        {
+            var title = $"Chunk {chunk.Index + 1} · {chunk.ProjectName}";
+            await _clipboard.ShareAsync(chunk.Content, title);
+            // Mark as copied so the UI gives the same visual feedback.
+            chunk.IsCopied = true;
+            CopiedCount = Chunks.Count(c => c.IsCopied);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"⚠️ Kunde inte dela: {ex.Message}";
+            _logger.LogWarning(ex, "Kunde inte dela chunk via share sheet.");
         }
     }
 
@@ -332,7 +456,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (chunk is null) return;
         chunk.IsCopied = false;
-        CopiedCount    = Chunks.Count(c => c.IsCopied);
+        CopiedCount = Chunks.Count(c => c.IsCopied);
     }
 
     [RelayCommand]
@@ -353,13 +477,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ClearToken()
     {
-        try   { SecureStorage.Default.Remove("github_token"); }
+        try { SecureStorage.Default.Remove("github_token"); }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Kunde inte ta bort GitHub-token från SecureStorage.");
         }
-
-        AccessToken  = string.Empty;
+        AccessToken = string.Empty;
         TokenIsSaved = false;
     }
 
@@ -367,39 +490,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void Reset()
     {
         Chunks.Clear();
-        ChunkCount    = 0;
-        CopiedCount   = 0;
-        HasChunks     = false;
-        HasError      = false;
-        ErrorText     = string.Empty;
-        TotalFiles    = 0;
-        TotalTokens   = 0;
+        ChunkCount = 0;
+        CopiedCount = 0;
+        HasChunks = false;
+        HasError = false;
+        ErrorText = string.Empty;
+        TotalFiles = 0;
+        TotalTokens = 0;
         TotalProjects = 0;
-        StatusText    = "Ange en GitHub-URL och tryck Hämta.";
+        StatusText = "Ange en GitHub-URL och tryck Hämta.";
     }
 
     [RelayCommand]
     private void ToggleFileTypes() => IsFileTypesExpanded = !IsFileTypesExpanded;
 
-    [RelayCommand]
-    private void ToggleFolders() => IsFoldersExpanded = !IsFoldersExpanded;
-
-    // ── IDisposable ────────────────────────────────────────────────────────────
-
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-
-        // Cancel and dispose any in-flight request.
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-
-        // Unsubscribe all FileTypeFilter event handlers to prevent ghost subscriptions.
         foreach (var (filter, handler) in _fileTypeHandlers)
             filter.PropertyChanged -= handler;
-
         _fileTypeHandlers.Clear();
     }
 }
