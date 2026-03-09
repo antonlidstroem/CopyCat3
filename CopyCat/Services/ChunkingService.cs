@@ -9,17 +9,14 @@ public class ChunkingService : IChunkingService
     private const double CharsPerToken = 4.0;
     private const string FileSeparator = "\n\n";
 
-    // Matchar top-level typdeklarationer (class / struct / record / interface / enum).
-    // Täcker:
-    //   - File-scoped namespace (0 indragning): public class Foo
-    //   - Traditionell namespace-block (4 spaces/1 tab): [4 sp]public class Foo
-    //   - Alla kombinationer av modifierare (public, partial, abstract, sealed …)
-    // Inre/nästade klasser (>=8 spaces) matchas INTE — de stannar i förälderklassens block.
-    private static readonly Regex TopLevelTypeDeclRegex = new(
-        @"^[ \t]*" + // Tillåt vilket indrag som helst
+    // Matchar typdeklarationer (class / struct / record / interface / enum) på valfritt djup.
+    // Klammerdjups-filtret i ExtractTypeUnits avgör om det är en toppnivå-deklaration
+    // eller en nästlad klass — regex:en behöver därför inte begränsa indraget.
+    private static readonly Regex TypeDeclRegex = new(
+        @"^[ \t]*" +
         @"(?:(?:public|private|internal|protected|file|static|abstract|sealed|partial|readonly|unsafe|new|override|virtual)\s+)*" +
         @"(?:class|struct|record|interface|enum)\s+\w",
-        RegexOptions.Compiled | RegexOptions.Multiline); 
+        RegexOptions.Compiled | RegexOptions.Multiline);
 
     // ─────────────────────────────────────────────────────────────────
     //  Publik API
@@ -40,12 +37,12 @@ public class ChunkingService : IChunkingService
             .OrderBy(g => g.Key)
             .ToList();
 
-        var allChunks   = new List<CodeChunk>();
+        var allChunks = new List<CodeChunk>();
         int globalIndex = 0;
 
         foreach (var projectGroup in grouped)
         {
-            var projectFiles  = projectGroup.OrderBy(f => f.Path).ToList();
+            var projectFiles = projectGroup.OrderBy(f => f.Path).ToList();
             var projectChunks = ChunkProjectFiles(
                 projectGroup.Key, projectFiles, maxTokensPerChunk, ref globalIndex);
             allChunks.AddRange(projectChunks);
@@ -65,7 +62,7 @@ public class ChunkingService : IChunkingService
             .Where(f => f.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             .Select(f =>
             {
-                var dir  = NormalDir(Path.GetDirectoryName(f.Path) ?? "");
+                var dir = NormalDir(Path.GetDirectoryName(f.Path) ?? "");
                 var name = Path.GetFileNameWithoutExtension(f.Path);
                 return (dir, name);
             })
@@ -109,18 +106,17 @@ public class ChunkingService : IChunkingService
         int maxTokensPerChunk,
         ref int globalIndex)
     {
-        var result       = new List<CodeChunk>();
-        var buffer       = new StringBuilder();
+        var result = new List<CodeChunk>();
+        var buffer = new StringBuilder();
         int bufferTokens = 0;
 
         foreach (var (path, content) in files)
         {
-            string section       = BuildSection(path, content);
-            int    sectionTokens = EstimateTokens(section);
+            string section = BuildSection(path, content);
+            int sectionTokens = EstimateTokens(section);
 
             if (sectionTokens > maxTokensPerChunk)
             {
-                // Filen ryms inte i en chunk — töm buffert och splittra på klassgränser.
                 if (buffer.Length > 0)
                 {
                     result.Add(Finalize(globalIndex++, projectName,
@@ -133,7 +129,6 @@ public class ChunkingService : IChunkingService
                 continue;
             }
 
-            // Filen ryms — packa greedily i bufferten.
             int sepTokens = buffer.Length > 0 ? EstimateTokens(FileSeparator) : 0;
             if (bufferTokens + sepTokens + sectionTokens > maxTokensPerChunk
                 && buffer.Length > 0)
@@ -142,7 +137,7 @@ public class ChunkingService : IChunkingService
                     buffer.ToString(), bufferTokens));
                 buffer.Clear();
                 bufferTokens = 0;
-                sepTokens    = 0;
+                sepTokens = 0;
             }
             if (buffer.Length > 0)
             {
@@ -165,16 +160,16 @@ public class ChunkingService : IChunkingService
     // ─────────────────────────────────────────────────────────────────
 
     private List<CodeChunk> SplitLargeFile(
-        string  projectName,
-        string  filePath,
-        string  section,
-        int     maxTokensPerChunk,
+        string projectName,
+        string filePath,
+        string section,
+        int maxTokensPerChunk,
         ref int globalIndex)
     {
         var units = ExtractTypeUnits(section, filePath);
 
-        var result       = new List<CodeChunk>();
-        var buffer       = new StringBuilder();
+        var result = new List<CodeChunk>();
+        var buffer = new StringBuilder();
         int bufferTokens = 0;
 
         foreach (var unit in units)
@@ -183,7 +178,6 @@ public class ChunkingService : IChunkingService
 
             if (unitTokens > maxTokensPerChunk)
             {
-                // En enskild klass är för stor — sista utväg: splittra rad för rad.
                 if (buffer.Length > 0)
                 {
                     result.Add(Finalize(globalIndex++, projectName,
@@ -204,7 +198,7 @@ public class ChunkingService : IChunkingService
                     buffer.ToString(), bufferTokens));
                 buffer.Clear();
                 bufferTokens = 0;
-                sepTokens    = 0;
+                sepTokens = 0;
             }
             if (buffer.Length > 0)
             {
@@ -223,51 +217,85 @@ public class ChunkingService : IChunkingService
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Extrahera typenheter med korrekt block-start-detektering
+    //  Extrahera typenheter med klammerdjups-filtrering
     // ─────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Delar en fil-sektion i en typ-enhet per klass/interface/struct/record/enum.
+    /// Delar en fil-sektion i en enhet per toppnivå-klass/struct/record/interface/enum.
     ///
-    /// NYCKELFIXAR jämfört med tidigare versioner:
+    /// KÄRN-ALGORITM — klammerdjupsspårning:
     ///
-    /// 1. FindBlockStart() — varje klass-block börjar vid den närmast föregående
-    ///    [Attribut], /// doc-kommentaren eller // kommentaren, INTE vid klass-
-    ///    deklarationsraden. Detta säkerställer att [Serializable], [ApiController]
-    ///    etc. hamnar i RÄTT enhet och inte som en orphan i slutet av föregående enhet.
+    /// Problemet med ren indragnings-regex är att samma mönster "public class Foo"
+    /// förekommer för BÅDE toppnivå-klasser och nästlade klasser. Skillnaden är
+    /// kontextuell, inte syntaktisk — man kan inte avgöra nivån från raden isolerad.
     ///
-    /// 2. Preamble extraheras från lines[1..blockStarts[0]-1], d.v.s. EXKLUSIVE
-    ///    det första klass-blockets attribut. Tidigare togs preamble fram till
-    ///    class-deklarationsraden vilket råkade inkludera den första klassens
-    ///    attribut i preamble — och därmed i VARJE fortsättningsenhet.
+    /// Föregående fixes försökte begränsa indragning ([ ]{0,8}, sedan [ ]{0,4}) men
+    /// båda misslyckas i edge-cases:
+    ///   - [ ]{0,8} matchar nästlade klasser vid 8-space indent (standard i namespace-block)
+    ///   - [ ]{0,4} matchar nästlade klasser i file-scoped namespace (4-space indent)
+    ///
+    /// Enda tillförlitliga lösningen: spåra klammerdjupet rad för rad.
+    ///
+    /// Algoritm:
+    ///   1. Den FÖRSTA typdeklarationen som hittas anses vara toppnivå.
+    ///      Dess klammerdjup (topLevelDepth) sparas.
+    ///   2. Efterföljande typdeklarationer är toppnivå-syskon om och bara om
+    ///      braceDepth == topLevelDepth. Allt djupare ignoreras.
+    ///
+    /// Korrekt för alla standard C#-mönster:
+    ///   File-scoped namespace  → toppnivå-klass på djup 0, nästlad på djup 1+
+    ///   Traditionellt namespace { } → toppnivå på djup 1, nästlad på djup 2+
     ///
     /// GARANTI: Ingen rad tappas bort. Ingen klass bryts mitt i.
     /// </summary>
     private static List<string> ExtractTypeUnits(string section, string filePath)
     {
-        // Normalisera radslut (kritiskt — GitHub-repon har ofta \r\n).
-        var text  = section.Replace("\r\n", "\n").Replace('\r', '\n');
+        var text = section.Replace("\r\n", "\n").Replace('\r', '\n');
         var lines = text.Split('\n');
 
-        // Hitta radindex för top-level typdeklarationer (starta på i=1; lines[0] = header).
+        // ── Fas 1: hitta toppnivå-klassgränser via klammerdjupsspårning ──────
         var classBoundaries = new List<int>();
+        int braceDepth = 0;
+        int topLevelDepth = -1; // -1 = ännu ej fastställt
+
         for (int i = 1; i < lines.Length; i++)
         {
-            if (TopLevelTypeDeclRegex.IsMatch(lines[i]))
-                classBoundaries.Add(i);
+            // Kontrollera djupet INNAN vi räknar klamrar på denna rad.
+            // Det är djupet vid radstart som avgör klassens nivå.
+            if (TypeDeclRegex.IsMatch(lines[i]))
+            {
+                if (topLevelDepth < 0)
+                {
+                    // Första typdeklarationen → fastslår toppnivå-djupet.
+                    topLevelDepth = braceDepth;
+                    classBoundaries.Add(i);
+                }
+                else if (braceDepth == topLevelDepth)
+                {
+                    // Syskonsklass på exakt samma djup → ny toppnivå-enhet.
+                    classBoundaries.Add(i);
+                }
+                // braceDepth > topLevelDepth → nästlad klass, ignorera.
+            }
+
+            // Räkna klamrar EFTER kontrollen (påverkar nästa iteration).
+            foreach (char c in lines[i])
+            {
+                if (c == '{') braceDepth++;
+                else if (c == '}') braceDepth--;
+            }
         }
 
-        // Inga eller bara en typdekleration — returnera hela sektionen orörd.
+        // Inga eller bara en typdeklaration → returnera hela sektionen orörd.
         if (classBoundaries.Count <= 1)
             return [text];
 
-        // Beräkna det "verkliga" blockstarten för varje klass:
-        // gå bakåt från class-raden över [Attribut] och doc-kommentarer.
+        // ── Fas 2: beräkna verkliga blockstarter (attribut/kommentarer ingår) ─
         var blockStarts = new int[classBoundaries.Count];
         for (int ci = 0; ci < classBoundaries.Count; ci++)
             blockStarts[ci] = FindBlockStart(lines, classBoundaries[ci]);
 
-        // Preamble = lines[1 .. blockStarts[0]-1]
+        // Preamble = lines[1..blockStarts[0]-1]
         // (using-satser, namespace, globala attribut — UTAN den första klassens attribut)
         var preambleSb = new StringBuilder();
         for (int i = 1; i < blockStarts[0]; i++)
@@ -277,13 +305,13 @@ public class ChunkingService : IChunkingService
         }
         string preamble = preambleSb.ToString();
 
+        // ── Fas 3: bygg en enhet per toppnivå-klass ──────────────────────────
         var result = new List<string>();
 
         for (int ci = 0; ci < classBoundaries.Count; ci++)
         {
             int blockStart = blockStarts[ci];
-            // Blocket slutar precis innan nästa klass-blocks attribut börjar.
-            int blockEnd   = (ci + 1 < classBoundaries.Count)
+            int blockEnd = (ci + 1 < classBoundaries.Count)
                 ? blockStarts[ci + 1]
                 : lines.Length;
 
@@ -291,8 +319,7 @@ public class ChunkingService : IChunkingService
 
             if (ci == 0)
             {
-                // Enhet 0: original fil-header (lines[0]) + preamble + klass 1-blocket.
-                // = lines[0 .. blockEnd-1]
+                // Enhet 0: original fil-header (lines[0]) + allt t.o.m. nästa klass.
                 for (int i = 0; i < blockEnd; i++)
                 {
                     sb.Append(lines[i]);
@@ -301,11 +328,10 @@ public class ChunkingService : IChunkingService
             }
             else
             {
-                // Enhet k: fortsättningsheader + preamble (usings/namespace) + klass k-blocket.
-                sb.Append($"==== {filePath} (forts.) ====");
-                sb.Append('\n');
+                // Enhet k: fortsättningsheader + preamble + klass k-blocket.
+                sb.Append($"==== {filePath} (forts.) ====\n");
                 if (preamble.Length > 0)
-                    sb.Append(preamble); // avslutas redan med \n
+                    sb.Append(preamble);
 
                 for (int i = blockStart; i < blockEnd; i++)
                 {
@@ -323,21 +349,6 @@ public class ChunkingService : IChunkingService
     /// <summary>
     /// Hittar det verkliga startindexet för ett klass-block genom att gå bakåt
     /// från klass-deklarationsraden över [Attribut]-rader och kommentarer.
-    ///
-    /// Stannar vid:
-    ///   - En blank rad (den stannar hos föregående block).
-    ///   - En rad som INTE börjar med '[', '///' eller '//'.
-    ///     (t.ex. '}' från föregående klass, en namespace-rad, etc.)
-    ///
-    /// Det innebär att:
-    ///   [Serializable]
-    ///   public class Foo    ← blockStart pekar på [Serializable]-raden, inte Foo
-    ///
-    ///   /// <summary>...</summary>
-    ///   [ApiController]
-    ///   public class Bar    ← blockStart pekar på ///-raden
-    ///
-    /// Inre rader i föregående klass (}, {, kod) avbryter sökningen direkt.
     /// </summary>
     private static int FindBlockStart(string[] lines, int classLineIndex)
     {
@@ -353,7 +364,6 @@ public class ChunkingService : IChunkingService
             }
             else
             {
-                // Blank rad, '}', kod etc. — blockstart är fastställt.
                 break;
             }
         }
@@ -366,13 +376,13 @@ public class ChunkingService : IChunkingService
     // ─────────────────────────────────────────────────────────────────
 
     private List<CodeChunk> SplitByLines(
-        string  projectName,
-        string  unit,
-        int     maxTokensPerChunk,
+        string projectName,
+        string unit,
+        int maxTokensPerChunk,
         ref int globalIndex)
     {
         var result = new List<CodeChunk>();
-        var lines  = unit.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var lines = unit.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var buffer = new StringBuilder();
         int tokens = 0;
 
@@ -412,18 +422,18 @@ public class ChunkingService : IChunkingService
     }
 
     private List<CodeChunk> SplitLongLine(
-        string  projectName,
-        string  line,
-        int     maxTokensPerChunk,
+        string projectName,
+        string line,
+        int maxTokensPerChunk,
         ref int globalIndex)
     {
-        var result   = new List<CodeChunk>();
+        var result = new List<CodeChunk>();
         int maxChars = (int)(maxTokensPerChunk * CharsPerToken);
-        int offset   = 0;
+        int offset = 0;
 
         while (offset < line.Length)
         {
-            int    length  = Math.Min(maxChars, line.Length - offset);
+            int length = Math.Min(maxChars, line.Length - offset);
             string segment = line.Substring(offset, length);
             result.Add(Finalize(globalIndex++, projectName,
                 segment, EstimateTokens(segment)));
@@ -440,22 +450,22 @@ public class ChunkingService : IChunkingService
     private static string BuildSection(string path, string content)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"==== {path} ===="); // AppendLine för header-raden är ok
-        sb.Append(content.TrimEnd());       // Append (ej AppendLine) — undvik extra radbrytning
+        sb.AppendLine($"==== {path} ====");
+        sb.Append(content.TrimEnd());
         return sb.ToString();
     }
 
     private static CodeChunk Finalize(
-        int    index,
+        int index,
         string projectName,
         string content,
-        int    estimatedTokens) =>
+        int estimatedTokens) =>
         new()
         {
-            Index           = index,
-            ProjectName     = projectName,
-            Content         = content,
+            Index = index,
+            ProjectName = projectName,
+            Content = content,
             EstimatedTokens = estimatedTokens,
-            IsCopied        = false,
+            IsCopied = false,
         };
 }
