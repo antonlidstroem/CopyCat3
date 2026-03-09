@@ -21,11 +21,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool                     _initialized;
     private bool                     _disposed;
 
-    // Stored handler references — unsubscribed in Dispose().
     private readonly List<(FileTypeFilter Filter, PropertyChangedEventHandler Handler)>
         _fileTypeHandlers = [];
 
-    // Stored per-chunk handlers so we can track IsSelected changes across the collection.
     private readonly List<(CodeChunk Chunk, PropertyChangedEventHandler Handler)>
         _chunkHandlers = [];
 
@@ -91,7 +89,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // ── Multi-select state ─────────────────────────────────────────────────────
 
-    /// <summary>Antal chunks som för tillfället är markerade.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(ShareSelectedLabel))]
@@ -100,13 +97,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ClearSelectionCommand))]
     private int _selectedCount;
 
-    /// <summary>True när minst en chunk är markerad — styr knapp-synlighet.</summary>
     public bool HasSelection => SelectedCount > 0;
 
-    /// <summary>Label på dela-knappen, t.ex. "Dela markerade (3)".</summary>
     public string ShareSelectedLabel => $"Dela markerade  ({SelectedCount})";
 
-    /// <summary>Uppskattad token-summa för markerade chunks.</summary>
     public string SelectedTokensLabel
     {
         get
@@ -232,12 +226,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
     }
 
-    // ── Chunk handler subscription ─────────────────────────────────────────────
+    // ── Chunk subscription ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Prenumererar på PropertyChanged för en chunk så att SelectedCount
-    /// hålls synkroniserat när IsSelected ändras på enskilda chunks.
-    /// </summary>
     private void SubscribeChunk(CodeChunk chunk)
     {
         PropertyChangedEventHandler handler = (_, e) =>
@@ -259,7 +249,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshSelectedCount()
     {
         SelectedCount = Chunks.Count(c => c.IsSelected);
-        // SelectedTokensLabel beror på vilka chunks som är valda — notify manuellt.
         OnPropertyChanged(nameof(SelectedTokensLabel));
     }
 
@@ -310,14 +299,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
-        IsBusy      = true;
-        HasError    = false;
-        ErrorText   = string.Empty;
-        HasChunks   = false;
-        CopiedCount = 0;
+        IsBusy        = true;
+        HasError      = false;
+        ErrorText     = string.Empty;
+        HasChunks     = false;
+        CopiedCount   = 0;
         SelectedCount = 0;
 
-        // Avregistrera och töm gamla chunks.
         UnsubscribeAllChunks();
         Chunks.Clear();
         ChunkCount = 0;
@@ -396,6 +384,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
+    /// <summary>Kopierar en enskild chunk till urklipp. Anropas via tryck på kort-kroppen.</summary>
     [RelayCommand]
     private async Task CopyChunkAsync(CodeChunk chunk)
     {
@@ -414,21 +403,46 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Togglar IsSelected på en enskild chunk.
-    /// Anropas via TapGestureRecognizer (lång-tryck) på chunk-kortet.
+    /// Skickar en enskild chunk direkt till share sheet.
+    /// Anropas via dela-knappen (↗) på varje chunk-kort.
     /// </summary>
+    [RelayCommand]
+    private async Task ShareChunkAsync(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        try
+        {
+            var title = $"Chunk {chunk.Index + 1} · {chunk.ProjectName}";
+            await _shareService.ShareTextAsync(chunk.Content, title);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"⚠️ Kunde inte öppna share sheet: {ex.Message}";
+            _logger.LogWarning(ex, "Share sheet misslyckades för enskild chunk.");
+        }
+    }
+
+    /// <summary>
+    /// Togglar förhandsvisningen av chunk-innehållet.
+    /// Anropas via ▼/▲-knappen på varje chunk-kort.
+    /// </summary>
+    [RelayCommand]
+    private void TogglePreview(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded;
+    }
+
+    /// <summary>Togglar IsSelected för multi-select.</summary>
     [RelayCommand]
     private void ToggleChunkSelection(CodeChunk chunk)
     {
         if (chunk is null) return;
         chunk.IsSelected = !chunk.IsSelected;
-        // RefreshSelectedCount anropas via den prenumererade PropertyChanged-handlern.
     }
 
     /// <summary>
-    /// Slår ihop alla markerade chunks till en enda text och öppnar share sheet.
-    /// Chunkarna separeras med samma avgränsare som chunkning-tjänsten använder
-    /// så att AI:n ser en sammanhängande fil-lista.
+    /// Slår ihop alla markerade chunks och öppnar share sheet med dem som en enda text.
     /// </summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ShareSelectedAsync()
@@ -444,29 +458,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
             sb.Append(chunk.Content);
         }
 
-        var mergedText = sb.ToString();
-        var title      = selected.Count == 1
+        var title = selected.Count == 1
             ? $"Chunk {selected[0].Index + 1} · {selected[0].ProjectName}"
             : $"{selected.Count} chunks · {string.Join(", ", selected.Select(c => c.ProjectName).Distinct())}";
 
         try
         {
-            await _shareService.ShareTextAsync(mergedText, title);
+            await _shareService.ShareTextAsync(sb.ToString(), title);
         }
         catch (Exception ex)
         {
             StatusText = $"⚠️ Kunde inte öppna share sheet: {ex.Message}";
-            _logger.LogWarning(ex, "Share sheet misslyckades.");
+            _logger.LogWarning(ex, "Share sheet misslyckades för markerade chunks.");
         }
     }
 
-    /// <summary>Avmarkerar alla chunks.</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void ClearSelection()
     {
         foreach (var chunk in Chunks)
             chunk.IsSelected = false;
-        // SelectedCount sätts till 0 via PropertyChanged-handlers på chunkarna.
     }
 
     [RelayCommand]

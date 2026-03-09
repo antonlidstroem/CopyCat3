@@ -138,16 +138,11 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Grid.Column="0"
-                               Text="FILTYPER"
-                               Style="{StaticResource SectionTitle}"
-                               Margin="0"
-                               VerticalOptions="Center" />
+                        <Label Grid.Column="0" Text="FILTYPER"
+                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                Text="{Binding IsFileTypesExpanded, Converter={StaticResource ExpandArrowConv}}"
-                               TextColor="{StaticResource TextMuted}"
-                               FontSize="12"
-                               VerticalOptions="Center">
+                               TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ToggleFileTypesCommand}" />
                             </Label.GestureRecognizers>
@@ -156,10 +151,7 @@
                             <TapGestureRecognizer Command="{Binding ToggleFileTypesCommand}" />
                         </Grid.GestureRecognizers>
                     </Grid>
-
-                    <FlexLayout Wrap="Wrap"
-                                Direction="Row"
-                                JustifyContent="Start"
+                    <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
                                 IsVisible="{Binding IsFileTypesExpanded}">
                         <BindableLayout.ItemsSource>
                             <Binding Path="FileTypeFilters" />
@@ -173,8 +165,7 @@
                                         <CheckBox IsChecked="{Binding IsEnabled}"
                                                   Color="{StaticResource AccentPrimary}"
                                                   VerticalOptions="Center" />
-                                        <Label Text="{Binding Label}"
-                                               Style="{StaticResource ChipLabel}" />
+                                        <Label Text="{Binding Label}" Style="{StaticResource ChipLabel}" />
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
@@ -189,16 +180,11 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Grid.Column="0"
-                               Text="EXKLUDERA MAPPAR"
-                               Style="{StaticResource SectionTitle}"
-                               Margin="0"
-                               VerticalOptions="Center" />
+                        <Label Grid.Column="0" Text="EXKLUDERA MAPPAR"
+                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                Text="{Binding IsFoldersExpanded, Converter={StaticResource ExpandArrowConv}}"
-                               TextColor="{StaticResource TextMuted}"
-                               FontSize="12"
-                               VerticalOptions="Center">
+                               TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ToggleFoldersCommand}" />
                             </Label.GestureRecognizers>
@@ -207,10 +193,7 @@
                             <TapGestureRecognizer Command="{Binding ToggleFoldersCommand}" />
                         </Grid.GestureRecognizers>
                     </Grid>
-
-                    <FlexLayout Wrap="Wrap"
-                                Direction="Row"
-                                JustifyContent="Start"
+                    <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
                                 IsVisible="{Binding IsFoldersExpanded}">
                         <BindableLayout.ItemsSource>
                             <Binding Path="FolderFilters" />
@@ -224,8 +207,7 @@
                                         <CheckBox IsChecked="{Binding IsExcluded}"
                                                   Color="{StaticResource AccentGreen}"
                                                   VerticalOptions="Center" />
-                                        <Label Text="{Binding Name}"
-                                               Style="{StaticResource ChipLabel}" />
+                                        <Label Text="{Binding Name}" Style="{StaticResource ChipLabel}" />
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
@@ -240,33 +222,23 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-                        <Label Grid.Column="0"
-                               Text="MAX TOKENS / CHUNK"
-                               Style="{StaticResource SectionTitle}"
-                               Margin="0"
-                               VerticalOptions="Center" />
+                        <Label Grid.Column="0" Text="MAX TOKENS / CHUNK"
+                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Border Grid.Column="1" Style="{StaticResource TokenBadgeBorder}">
-                            <Label Text="{Binding MaxTokensLabel}"
-                                   Style="{StaticResource TokenBadgeLabel}" />
+                            <Label Text="{Binding MaxTokensLabel}" Style="{StaticResource TokenBadgeLabel}" />
                         </Border>
                     </Grid>
-                    <Slider Minimum="1000"
-                            Maximum="30000"
+                    <Slider Minimum="1000" Maximum="30000"
                             Value="{Binding MaxTokensPerChunk}"
                             MinimumTrackColor="{StaticResource SliderTrackActive}"
                             MaximumTrackColor="{StaticResource SliderTrackInactive}"
                             ThumbColor="{StaticResource SliderThumb}"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                     <Grid ColumnDefinitions="*,*">
-                        <Label Grid.Column="0"
-                               Text="1 000"
-                               TextColor="{StaticResource TextDim}"
-                               FontSize="10" />
-                        <Label Grid.Column="1"
-                               Text="30 000"
-                               TextColor="{StaticResource TextDim}"
-                               FontSize="10"
-                               HorizontalOptions="End" />
+                        <Label Grid.Column="0" Text="1 000"
+                               TextColor="{StaticResource TextDim}" FontSize="10" />
+                        <Label Grid.Column="1" Text="30 000"
+                               TextColor="{StaticResource TextDim}" FontSize="10" HorizontalOptions="End" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -280,9 +252,7 @@
                     Margin="0,0,0,8" />
 
             <!-- Cancel / Reset -->
-            <Grid ColumnDefinitions="*,*"
-                  ColumnSpacing="8"
-                  Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,12">
                 <Button Grid.Column="0"
                         Text="Abort"
                         Style="{StaticResource SecondaryBtn}"
@@ -300,20 +270,15 @@
                  ACTIVITY INDICATOR
                  ══════════════════════════════════════════════════ -->
             <VerticalStackLayout IsVisible="{Binding IsBusy}"
-                                 HorizontalOptions="Center"
-                                 Spacing="10"
-                                 Margin="0,0,0,10">
+                                 HorizontalOptions="Center" Spacing="10" Margin="0,0,0,10">
                 <ActivityIndicator IsRunning="{Binding IsBusy}"
                                    Color="{StaticResource ActivityIndicatorColor}"
-                                   HeightRequest="36"
-                                   WidthRequest="36"
+                                   HeightRequest="36" WidthRequest="36"
                                    HorizontalOptions="Center" />
                 <Label Text="{Binding StatusText}"
                        TextColor="{StaticResource TextSecondary}"
-                       FontSize="14"
-                       HorizontalOptions="Center"
-                       HorizontalTextAlignment="Center"
-                       LineBreakMode="WordWrap" />
+                       FontSize="14" HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
             </VerticalStackLayout>
 
             <!-- ══════════════════════════════════════════════════
@@ -321,50 +286,38 @@
                  ══════════════════════════════════════════════════ -->
             <Border Style="{StaticResource StatusBorder}"
                     IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}">
-                <Label Text="{Binding StatusText}"
-                       Style="{StaticResource StatusLabel}" />
+                <Label Text="{Binding StatusText}" Style="{StaticResource StatusLabel}" />
             </Border>
 
             <!-- ══════════════════════════════════════════════════
                  ERROR PANEL
                  ══════════════════════════════════════════════════ -->
-            <Border Style="{StaticResource ErrorBorder}"
-                    IsVisible="{Binding HasError}">
+            <Border Style="{StaticResource ErrorBorder}" IsVisible="{Binding HasError}">
                 <Grid ColumnDefinitions="28,*" ColumnSpacing="8">
-                    <Label Grid.Column="0"
-                           Text="⚠️"
-                           FontSize="18"
-                           VerticalOptions="Start" />
-                    <Label Grid.Column="1"
-                           Text="{Binding ErrorText}"
-                           Style="{StaticResource ErrorLabel}" />
+                    <Label Grid.Column="0" Text="⚠️" FontSize="18" VerticalOptions="Start" />
+                    <Label Grid.Column="1" Text="{Binding ErrorText}" Style="{StaticResource ErrorLabel}" />
                 </Grid>
             </Border>
 
             <!-- ══════════════════════════════════════════════════
                  SUMMARY STATS
                  ══════════════════════════════════════════════════ -->
-            <Border Style="{StaticResource SummaryBorder}"
-                    IsVisible="{Binding HasChunks}">
+            <Border Style="{StaticResource SummaryBorder}" IsVisible="{Binding HasChunks}">
                 <Grid ColumnDefinitions="*,*,*,*">
                     <VerticalStackLayout Grid.Column="0" HorizontalOptions="Center" Spacing="2">
-                        <Label Text="{Binding TotalFiles}"
-                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="{Binding TotalFiles}" Style="{StaticResource StatNumberLabel}" />
                         <Label Text="filer" Style="{StaticResource StatCaptionLabel}" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center" Spacing="2">
-                        <Label Text="{Binding TotalProjects}"
-                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="{Binding TotalProjects}" Style="{StaticResource StatNumberLabel}" />
                         <Label Text="projekt" Style="{StaticResource StatCaptionLabel}" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center" Spacing="2">
-                        <Label Text="{Binding ChunkCount}"
-                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="{Binding ChunkCount}" Style="{StaticResource StatNumberLabel}" />
                         <Label Text="chunks" Style="{StaticResource StatCaptionLabel}" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Grid.Column="3" HorizontalOptions="Center" Spacing="2">
-                        <Label Text="{Binding CopiedCount}"
-                               Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="{Binding CopiedCount}" Style="{StaticResource StatNumberLabel}" />
                         <Label Text="kopierade" Style="{StaticResource StatCaptionLabel}" />
                     </VerticalStackLayout>
                 </Grid>
@@ -375,45 +328,33 @@
                  ══════════════════════════════════════════════════ -->
             <VerticalStackLayout IsVisible="{Binding HasChunks}" Spacing="0">
 
-                <!-- Rubrik + instruktionstext -->
+                <!-- Rubrik + instruktion -->
                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
                     <Label Grid.Column="0"
                            Text="CHUNKS"
                            Style="{StaticResource SectionTitle}"
-                           Margin="0"
-                           VerticalOptions="Center" />
-                    <!-- Instruktion byter text beroende på om något är markerat -->
+                           Margin="0" VerticalOptions="Center" />
                     <Label Grid.Column="1"
                            Text="{Binding HasSelection, Converter={StaticResource SelectionHintConv}}"
                            TextColor="{StaticResource TextMuted}"
-                           FontSize="11"
-                           VerticalOptions="Center" />
+                           FontSize="11" VerticalOptions="Center" />
                 </Grid>
 
-                <!-- ══ MULTI-SELECT TOOLBAR ══════════════════════════════════
-                     Visas bara när minst en chunk är markerad.
-                     Innehåller token-summering, dela-knapp och avmarkera-knapp.
-                     ═══════════════════════════════════════════════════════ -->
+                <!-- Multi-select toolbar — visas bara när ≥1 chunk är markerad -->
                 <Border Style="{StaticResource SelectionToolbarBorder}"
                         IsVisible="{Binding HasSelection}">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-
-                        <!-- Token-summering -->
                         <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="1">
                             <Label Text="{Binding ShareSelectedLabel}"
                                    Style="{StaticResource SelectionCountLabel}" />
                             <Label Text="{Binding SelectedTokensLabel}"
                                    Style="{StaticResource SelectionTokensLabel}" />
                         </VerticalStackLayout>
-
-                        <!-- Avmarkera allt -->
                         <Button Grid.Column="1"
                                 Text="✕"
                                 Style="{StaticResource IconBtn}"
                                 Command="{Binding ClearSelectionCommand}"
                                 ToolTipProperties.Text="Avmarkera alla" />
-
-                        <!-- Dela markerade — primärknapp -->
                         <Button Grid.Column="2"
                                 Text="Dela ↗"
                                 Style="{StaticResource ShareBtn}"
@@ -421,9 +362,15 @@
                     </Grid>
                 </Border>
 
-                <!-- Chunk-kort -->
-                <CollectionView ItemsSource="{Binding Chunks}"
-                                SelectionMode="None">
+                <!-- ═══════════════════════════════════════════
+                     CHUNK-KORT
+                     Varje kort har tre interaktionszoner:
+                       1. Tryck på kort-kroppen  → kopiera till urklipp
+                       2. Dela-knappen (↗)       → share sheet (enskild chunk)
+                       3. Förhandsvisningsknapp (▼/▲) → expandera/kollapsa innehåll
+                       4. Checkbox               → multi-select
+                     ═══════════════════════════════════════════ -->
+                <CollectionView ItemsSource="{Binding Chunks}" SelectionMode="None">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:CodeChunk">
 
@@ -431,44 +378,75 @@
                                     BackgroundColor="{Binding IsSelected, Converter={StaticResource ChunkSelectedBgConv}}"
                                     Stroke="{Binding IsSelected, Converter={StaticResource ChunkSelectedBorderConv}}">
 
-                                <Grid ColumnDefinitions="Auto,*,Auto"
-                                      RowDefinitions="Auto,Auto"
-                                      Padding="14,12">
+                                <VerticalStackLayout Spacing="0">
 
-                                    <!-- Markerings-checkbox (kolumn 0, båda rader) -->
-                                    <CheckBox Grid.Row="0"
-                                              Grid.Column="0"
-                                              Grid.RowSpan="2"
-                                              IsChecked="{Binding IsSelected}"
-                                              Color="{StaticResource AccentPrimary}"
-                                              VerticalOptions="Center"
-                                              Margin="0,0,8,0" />
+                                    <!-- Huvud-rad: checkbox + titel/sub + knappar -->
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                                          RowDefinitions="Auto,Auto"
+                                          Padding="14,12">
 
-                                    <!-- Titel -->
-                                    <Label Grid.Row="0" Grid.Column="1"
-                                           Text="{Binding DisplayLabel}"
-                                           Style="{StaticResource ChunkTitleLabel}" />
+                                        <!-- Kolumn 0: Checkbox för multi-select (båda rader) -->
+                                        <CheckBox Grid.Row="0" Grid.Column="0"
+                                                  Grid.RowSpan="2"
+                                                  IsChecked="{Binding IsSelected}"
+                                                  Color="{StaticResource AccentPrimary}"
+                                                  VerticalOptions="Center"
+                                                  Margin="0,0,6,0" />
 
-                                    <!-- Sublabel (tokens / kopierad) -->
-                                    <Label Grid.Row="1" Grid.Column="1"
-                                           Text="{Binding SubLabel}"
-                                           Style="{StaticResource ChunkSubLabel}" />
+                                        <!-- Kolumn 1: Titel -->
+                                        <Label Grid.Row="0" Grid.Column="1"
+                                               Text="{Binding DisplayLabel}"
+                                               Style="{StaticResource ChunkTitleLabel}" />
 
-                                    <!-- Kopierad-bock (kolumn 2, båda rader) -->
-                                    <Label Grid.Row="0" Grid.Column="2"
-                                           Grid.RowSpan="2"
-                                           Text="✓"
-                                           Style="{StaticResource ChunkCheckLabel}"
-                                           IsVisible="{Binding IsCopied}" />
+                                        <!-- Kolumn 1: Sublabel (tokens / kopierad) -->
+                                        <Label Grid.Row="1" Grid.Column="1"
+                                               Text="{Binding SubLabel}"
+                                               Style="{StaticResource ChunkSubLabel}" />
 
-                                    <!-- Tryck på hela kortet = kopiera till urklipp -->
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer
-                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
-                                            CommandParameter="{Binding .}" />
-                                    </Grid.GestureRecognizers>
-                                </Grid>
+                                        <!-- Kolumn 2: Kopierad-bock (båda rader) -->
+                                        <Label Grid.Row="0" Grid.Column="2"
+                                               Grid.RowSpan="2"
+                                               Text="✓"
+                                               Style="{StaticResource ChunkCheckLabel}"
+                                               IsVisible="{Binding IsCopied}" />
 
+                                        <!-- Kolumn 3: Åtgärdsknappar staplade vertikalt -->
+                                        <VerticalStackLayout Grid.Row="0" Grid.Column="3"
+                                                             Grid.RowSpan="2"
+                                                             Spacing="0"
+                                                             VerticalOptions="Center">
+
+                                            <!-- Dela (↗) — öppnar share sheet för just denna chunk -->
+                                            <Button Text="↗"
+                                                    Style="{StaticResource ChunkActionBtn}"
+                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ShareChunkCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    ToolTipProperties.Text="Dela via share sheet" />
+
+                                            <!-- Förhandsvisning (▼/▲) — expanderar innehållssnippet -->
+                                            <Button Text="{Binding PreviewToggleIcon}"
+                                                    Style="{StaticResource ChunkActionBtn}"
+                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePreviewCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    ToolTipProperties.Text="Förhandsgranska innehåll" />
+                                        </VerticalStackLayout>
+
+                                        <!-- Tryck på hela kortet = kopiera till urklipp -->
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
+                                    </Grid>
+
+                                    <!-- Förhandsvisning — expanderas när IsPreviewExpanded = true -->
+                                    <Border Style="{StaticResource PreviewBorder}"
+                                            IsVisible="{Binding IsPreviewExpanded}">
+                                        <Label Text="{Binding PreviewSnippet}"
+                                               Style="{StaticResource PreviewLabel}" />
+                                    </Border>
+
+                                </VerticalStackLayout>
                             </Border>
 
                         </DataTemplate>

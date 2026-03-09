@@ -18,9 +18,8 @@
     <Color x:Key="BgChipOff">#13131F</Color>
     <Color x:Key="BgChunkDefault">#1A1A2E</Color>
     <Color x:Key="BgChunkCopied">#1A2E20</Color>
-
-    <!-- Multi-select: markerad chunk har en distinkt blå bakgrund -->
     <Color x:Key="BgChunkSelected">#17213A</Color>
+    <Color x:Key="BgPreview">#0D0D18</Color>
 
     <Color x:Key="AccentPrimary">#5B8EFF</Color>
     <Color x:Key="AccentPrimaryLight">#7BACFF</Color>
@@ -30,7 +29,6 @@
     <Color x:Key="AccentGreenBg">#3322C55E</Color>
     <Color x:Key="AccentGreenBorder">#3322C55E</Color>
 
-    <!-- Toolbar för multi-select -->
     <Color x:Key="BgSelectionToolbar">#1A2240</Color>
     <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
 
@@ -42,6 +40,7 @@
     <Color x:Key="TextError">#FF7070</Color>
     <Color x:Key="TextAccent">#7BACFF</Color>
     <Color x:Key="TextOnAccent">#FFFFFF</Color>
+    <Color x:Key="TextCode">#B0C4FF</Color>
 
     <Color x:Key="BorderDefault">#2D2D4A</Color>
     <Color x:Key="BorderInput">#3D3D60</Color>
@@ -52,6 +51,7 @@
     <Color x:Key="BorderChunkDefault">#2D2D4A</Color>
     <Color x:Key="BorderChunkCopied">#22C55E</Color>
     <Color x:Key="BorderChunkSelected">#5B8EFF</Color>
+    <Color x:Key="BorderPreview">#1E1E35</Color>
 
     <Color x:Key="SliderTrackActive">#5B8EFF</Color>
     <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
@@ -62,7 +62,6 @@
          CONVERTERS
          ══════════════════════════════════════════════════════════ -->
 
-    <!-- Chip -->
     <conv:BoolToColorConverter x:Key="ChipBorderConv"
                                TrueColor="{StaticResource BorderChipOn}"
                                FalseColor="{StaticResource BorderChipOff}" />
@@ -70,7 +69,6 @@
                                TrueColor="{StaticResource BgChipOn}"
                                FalseColor="{StaticResource BgChipOff}" />
 
-    <!-- Chunk kopierad-tillstånd (oförändrat) -->
     <conv:BoolToColorConverter x:Key="ChunkBorderConv"
                                TrueColor="{StaticResource BorderChunkCopied}"
                                FalseColor="{StaticResource BorderChunkDefault}" />
@@ -78,7 +76,7 @@
                                TrueColor="{StaticResource BgChunkCopied}"
                                FalseColor="{StaticResource BgChunkDefault}" />
 
-    <!-- Chunk markerad-tillstånd — blå border/bakgrund när IsSelected=true -->
+    <!-- Multi-select: blå border/bakgrund när IsSelected=true -->
     <conv:BoolToColorConverter x:Key="ChunkSelectedBorderConv"
                                TrueColor="{StaticResource BorderChunkSelected}"
                                FalseColor="{StaticResource BorderChunkDefault}" />
@@ -92,9 +90,7 @@
                                        TrueValue="▲"
                                        FalseValue="▼" />
 
-    <!-- Instruktionstext bredvid CHUNKS-rubriken:
-         Ingen markering → visa "håll för att markera"
-         Markering aktiv → visa tom sträng (toolbar visar info istället) -->
+    <!-- Instruktionstext bredvid CHUNKS-rubriken -->
     <conv:BoolToStringConverter        x:Key="SelectionHintConv"
                                        TrueValue=""
                                        FalseValue="kryssa för att markera" />
@@ -222,7 +218,17 @@
         <Setter Property="MinimumWidthRequest"  Value="44" />
     </Style>
 
-    <!-- Dela-knappen i multi-select toolbar — accentfärg, kompaktare -->
+    <!-- Dela + förhandsvisnings-knappar inuti varje chunk-kort -->
+    <Style x:Key="ChunkActionBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="Transparent" />
+        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="16" />
+        <Setter Property="Padding"              Value="6,4" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="MinimumWidthRequest"  Value="36" />
+    </Style>
+
+    <!-- Dela-knappen i multi-select toolbar -->
     <Style x:Key="ShareBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimary}" />
         <Setter Property="TextColor"            Value="{StaticResource TextOnAccent}" />
@@ -256,6 +262,24 @@
     <Style x:Key="SelectionTokensLabel" TargetType="Label">
         <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="11" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         FÖRHANDSVISNING (expanderbar)
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="PreviewBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgPreview}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <!-- Ingen top-border radius — visas direkt under huvud-raden -->
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,14,14" />
+        <Setter Property="Padding"         Value="14,10,14,14" />
+    </Style>
+
+    <Style x:Key="PreviewLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextCode}" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="FontFamily"    Value="OpenSansRegular" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -295,7 +319,7 @@
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
-         CHUNK BUTTONS
+         CHUNK CARDS
          ══════════════════════════════════════════════════════════ -->
     <Style x:Key="ChunkBorder" TargetType="Border">
         <Setter Property="StrokeThickness" Value="1.5" />
@@ -322,7 +346,7 @@
         <Setter Property="TextColor"       Value="{StaticResource AccentGreen}" />
         <Setter Property="FontSize"        Value="22" />
         <Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Margin"          Value="8,0,0,0" />
+        <Setter Property="Margin"          Value="4,0,0,0" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
