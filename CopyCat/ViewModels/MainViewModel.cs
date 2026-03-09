@@ -33,6 +33,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
     private string _repoUrl = string.Empty;
 
+    partial void OnRepoUrlChanged(string value)
+    {
+        // Rensa grenar när URL ändras så att användaren vet att de behöver hämta igen
+        if (!string.IsNullOrWhiteSpace(value) && !value.Contains("github.com"))
+            return;
+        BranchOptions.Clear();
+        OnPropertyChanged(nameof(HasBranchOptions));
+    }
+
     [ObservableProperty]
     private string _accessToken = string.Empty;
 
@@ -49,12 +58,50 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isFoldersExpanded;
 
     [ObservableProperty]
+    private bool _isFilePatternsExpanded;
+
+    [ObservableProperty]
+    private bool _isFetchingBranches;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MaxTokensLabel))]
+    [NotifyPropertyChangedFor(nameof(SliderWarningText))]
+    [NotifyPropertyChangedFor(nameof(SliderWarningColor))]
     private double _maxTokensPerChunk = 10000;
 
     public string MaxTokensLabel => $"{MaxTokensPerChunk:N0}";
 
-    partial void OnMaxTokensPerChunkChanged(double value) =>
-        OnPropertyChanged(nameof(MaxTokensLabel));
+    // ── Slider contextual warnings ─────────────────────────────────────────────
+
+    public string SliderWarningText
+    {
+        get
+        {
+            var t = (int)MaxTokensPerChunk;
+            return t switch
+            {
+                < 2000  => "⚠️ Mycket få tokens — ger många chunks. Använd multiselect för att kombinera.",
+                < 4097  => "ℹ️ Passar GPT-3.5 (4K) och de flesta enklare AI-chattgränssnitt.",
+                < 8193  => "✅ Bra balans — fungerar med GPT-4, Claude och Gemini.",
+                < 16001 => "ℹ️ Över GPT-3.5-gränsen. Fungerar med GPT-4 Turbo, Claude 3+ och Gemini 1.5.",
+                < 25001 => "⚠️ Stora chunks — vissa AI-gränssnitt kanske inte accepterar inklistrad text. Föredra share sheet (↗).",
+                _       => "🚨 Mycket stora chunks — använd share sheet (↗) istället för urklipp för bäst resultat."
+            };
+        }
+    }
+
+    public Color SliderWarningColor
+    {
+        get
+        {
+            var t = (int)MaxTokensPerChunk;
+            if (t < 2000 || t > 24999)
+                return Color.FromArgb("#FF7070"); // TextError – röd/orange
+            if (t is >= 4097 and < 8193)
+                return Color.FromArgb("#22C55E"); // AccentGreen – grön
+            return Color.FromArgb("#A0A0C0");     // TextSecondary – neutral
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
@@ -114,12 +161,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // ── Collections ────────────────────────────────────────────────────────────
 
-    public ObservableCollection<CodeChunk>      Chunks          { get; } = [];
-    public ObservableCollection<FileTypeFilter> FileTypeFilters { get; } = [];
-    public ObservableCollection<FolderFilter>   FolderFilters   { get; } = [];
-    public ObservableCollection<string>         RecentUrls      { get; } = [];
+    public ObservableCollection<CodeChunk>       Chunks             { get; } = [];
+    public ObservableCollection<FileTypeFilter>  FileTypeFilters    { get; } = [];
+    public ObservableCollection<FolderFilter>    FolderFilters      { get; } = [];
+    public ObservableCollection<FilePatternFilter> FilePatternFilters { get; } = [];
+    public ObservableCollection<string>          RecentUrls         { get; } = [];
+    public ObservableCollection<string>          BranchOptions      { get; } = [];
 
-    public bool HasRecentUrls => RecentUrls.Count > 0;
+    public bool HasRecentUrls    => RecentUrls.Count > 0;
+    public bool HasBranchOptions => BranchOptions.Count > 0;
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
@@ -138,6 +188,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         InitFileTypeFilters();
         InitFolderFilters();
+        InitFilePatternFilters();
 
         RecentUrls.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentUrls));
     }
@@ -226,6 +277,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
             FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
     }
 
+    private void InitFilePatternFilters()
+    {
+        var defaults = new[]
+        {
+            new FilePatternFilter { Pattern = "*Test*",        IsEnabled = false },
+            new FilePatternFilter { Pattern = "*Spec*",        IsEnabled = false },
+            new FilePatternFilter { Pattern = "*_test.*",      IsEnabled = false },
+            new FilePatternFilter { Pattern = "*.spec.*",      IsEnabled = false },
+            new FilePatternFilter { Pattern = "*.min.*",       IsEnabled = true  },
+            new FilePatternFilter { Pattern = "*.generated.*", IsEnabled = true  },
+            new FilePatternFilter { Pattern = "*.Designer.*",  IsEnabled = true  },
+            new FilePatternFilter { Pattern = "*Reference*",   IsEnabled = false },
+            new FilePatternFilter { Pattern = "*Migration*",   IsEnabled = false },
+        };
+
+        foreach (var f in defaults)
+            FilePatternFilters.Add(f);
+    }
+
     // ── Chunk subscription ─────────────────────────────────────────────────────
 
     private void SubscribeChunk(CodeChunk chunk)
@@ -269,6 +339,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         FolderFilters
             .Where(f => f.IsExcluded)
             .Select(f => f.Name);
+
+    private IEnumerable<string> GetExcludedFilePatterns() =>
+        FilePatternFilters
+            .Where(f => f.IsEnabled)
+            .Select(f => f.Pattern);
 
     private void SaveRecentUrl(string url)
     {
@@ -314,6 +389,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             var extensions      = GetSelectedExtensions();
             var excludedFolders = GetExcludedFolders().ToList();
+            var excludedPatterns = GetExcludedFilePatterns().ToList();
             var progress        = new Progress<string>(msg => StatusText = msg);
 
             var files = await _gitHubService.FetchFilesAsync(
@@ -322,13 +398,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 AccessToken,
                 Branch,
                 excludedFolders,
+                excludedPatterns,
                 progress,
                 _cts.Token);
 
             TotalFiles = files.Count;
             StatusText = $"Chunkar {files.Count} filer…";
 
-            var token = _cts.Token;
+            var token  = _cts.Token;
             var chunks = await Task.Run(
                 () => _chunkingService.CreateChunks(files, (int)MaxTokensPerChunk, token),
                 token);
@@ -381,10 +458,60 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Hämtar grenar för det angivna repot och fyller BranchOptions-listan.
+    /// </summary>
+    [RelayCommand]
+    private async Task FetchBranchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RepoUrl) || !RepoUrl.Contains("github.com"))
+        {
+            StatusText = "⚠️ Ange en giltig GitHub-URL innan du hämtar grenar.";
+            return;
+        }
+
+        IsFetchingBranches = true;
+        try
+        {
+            var branches = await _gitHubService.FetchBranchesAsync(
+                RepoUrl.Trim(), AccessToken);
+
+            BranchOptions.Clear();
+            foreach (var b in branches)
+                BranchOptions.Add(b);
+
+            OnPropertyChanged(nameof(HasBranchOptions));
+
+            if (BranchOptions.Count == 0)
+            {
+                StatusText = "⚠️ Inga grenar hittades (publikt repo kräver token för gren-listning).";
+                return;
+            }
+
+            // Välj automatiskt aktuell gren om den finns, annars välj första
+            if (!BranchOptions.Contains(Branch))
+                Branch = BranchOptions[0];
+
+            StatusText = $"Hittade {BranchOptions.Count} grenar.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"⚠️ Kunde inte hämta grenar: {ex.Message}";
+            _logger.LogWarning(ex, "Kunde inte hämta grenar.");
+        }
+        finally
+        {
+            IsFetchingBranches = false;
+        }
+    }
+
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
-    /// <summary>Kopierar en enskild chunk till urklipp. Anropas via tryck på kort-kroppen.</summary>
+    /// <summary>
+    /// Kopierar en enskild chunk till urklipp.
+    /// Återställer IsCopied på alla andra chunks (bara en aktiv åt gången).
+    /// </summary>
     [RelayCommand]
     private async Task CopyChunkAsync(CodeChunk chunk)
     {
@@ -392,6 +519,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await _clipboard.SetTextAsync(chunk.Content);
+
+            // Återställ alla andra chunks — bara en grön åt gången
+            foreach (var c in Chunks)
+                c.IsCopied = false;
+
             chunk.IsCopied = true;
             CopiedCount    = Chunks.Count(c => c.IsCopied);
         }
@@ -402,10 +534,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Skickar en enskild chunk direkt till share sheet.
-    /// Anropas via dela-knappen (↗) på varje chunk-kort.
-    /// </summary>
+    /// <summary>Skickar en enskild chunk direkt till share sheet.</summary>
     [RelayCommand]
     private async Task ShareChunkAsync(CodeChunk chunk)
     {
@@ -422,10 +551,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Togglar förhandsvisningen av chunk-innehållet.
-    /// Anropas via ▼/▲-knappen på varje chunk-kort.
-    /// </summary>
+    /// <summary>Togglar förhandsvisningen av chunk-innehållet.</summary>
     [RelayCommand]
     private void TogglePreview(CodeChunk chunk)
     {
@@ -441,9 +567,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         chunk.IsSelected = !chunk.IsSelected;
     }
 
-    /// <summary>
-    /// Slår ihop alla markerade chunks och öppnar share sheet med dem som en enda text.
-    /// </summary>
+    /// <summary>Slår ihop alla markerade chunks och öppnar share sheet.</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ShareSelectedAsync()
     {
@@ -530,6 +654,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void ToggleFolders() => IsFoldersExpanded = !IsFoldersExpanded;
+
+    [RelayCommand]
+    private void ToggleFilePatterns() => IsFilePatternsExpanded = !IsFilePatternsExpanded;
 
     // ── IDisposable ────────────────────────────────────────────────────────────
 
