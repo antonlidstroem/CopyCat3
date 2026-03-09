@@ -185,8 +185,9 @@ public class ChunkingService : IChunkingService
                     buffer.Clear();
                     bufferTokens = 0;
                 }
+                // Skicka med filePath så SplitByLines kan sätta rätt fortsättningsheader.
                 result.AddRange(
-                    SplitByLines(projectName, unit, maxTokensPerChunk, ref globalIndex));
+                    SplitByLines(projectName, filePath, unit, maxTokensPerChunk, ref globalIndex));
                 continue;
             }
 
@@ -225,28 +226,13 @@ public class ChunkingService : IChunkingService
     ///
     /// KÄRN-ALGORITM — klammerdjupsspårning:
     ///
-    /// Problemet med ren indragnings-regex är att samma mönster "public class Foo"
-    /// förekommer för BÅDE toppnivå-klasser och nästlade klasser. Skillnaden är
-    /// kontextuell, inte syntaktisk — man kan inte avgöra nivån från raden isolerad.
+    /// Spårar klammerdjupet rad för rad. Den FÖRSTA typdeklarationen fastställer
+    /// topLevelDepth. Efterföljande typdeklarationer är toppnivå-syskon om och bara
+    /// om braceDepth == topLevelDepth. Djupare deklarationer ignoreras (nästlade klasser).
     ///
-    /// Föregående fixes försökte begränsa indragning ([ ]{0,8}, sedan [ ]{0,4}) men
-    /// båda misslyckas i edge-cases:
-    ///   - [ ]{0,8} matchar nästlade klasser vid 8-space indent (standard i namespace-block)
-    ///   - [ ]{0,4} matchar nästlade klasser i file-scoped namespace (4-space indent)
-    ///
-    /// Enda tillförlitliga lösningen: spåra klammerdjupet rad för rad.
-    ///
-    /// Algoritm:
-    ///   1. Den FÖRSTA typdeklarationen som hittas anses vara toppnivå.
-    ///      Dess klammerdjup (topLevelDepth) sparas.
-    ///   2. Efterföljande typdeklarationer är toppnivå-syskon om och bara om
-    ///      braceDepth == topLevelDepth. Allt djupare ignoreras.
-    ///
-    /// Korrekt för alla standard C#-mönster:
+    /// Korrekt för:
     ///   File-scoped namespace  → toppnivå-klass på djup 0, nästlad på djup 1+
     ///   Traditionellt namespace { } → toppnivå på djup 1, nästlad på djup 2+
-    ///
-    /// GARANTI: Ingen rad tappas bort. Ingen klass bryts mitt i.
     /// </summary>
     private static List<string> ExtractTypeUnits(string section, string filePath)
     {
@@ -256,29 +242,23 @@ public class ChunkingService : IChunkingService
         // ── Fas 1: hitta toppnivå-klassgränser via klammerdjupsspårning ──────
         var classBoundaries = new List<int>();
         int braceDepth = 0;
-        int topLevelDepth = -1; // -1 = ännu ej fastställt
+        int topLevelDepth = -1;
 
         for (int i = 1; i < lines.Length; i++)
         {
-            // Kontrollera djupet INNAN vi räknar klamrar på denna rad.
-            // Det är djupet vid radstart som avgör klassens nivå.
             if (TypeDeclRegex.IsMatch(lines[i]))
             {
                 if (topLevelDepth < 0)
                 {
-                    // Första typdeklarationen → fastslår toppnivå-djupet.
                     topLevelDepth = braceDepth;
                     classBoundaries.Add(i);
                 }
                 else if (braceDepth == topLevelDepth)
                 {
-                    // Syskonsklass på exakt samma djup → ny toppnivå-enhet.
                     classBoundaries.Add(i);
                 }
-                // braceDepth > topLevelDepth → nästlad klass, ignorera.
             }
 
-            // Räkna klamrar EFTER kontrollen (påverkar nästa iteration).
             foreach (char c in lines[i])
             {
                 if (c == '{') braceDepth++;
@@ -286,17 +266,14 @@ public class ChunkingService : IChunkingService
             }
         }
 
-        // Inga eller bara en typdeklaration → returnera hela sektionen orörd.
         if (classBoundaries.Count <= 1)
             return [text];
 
-        // ── Fas 2: beräkna verkliga blockstarter (attribut/kommentarer ingår) ─
+        // ── Fas 2: beräkna verkliga blockstarter ──────────────────────────────
         var blockStarts = new int[classBoundaries.Count];
         for (int ci = 0; ci < classBoundaries.Count; ci++)
             blockStarts[ci] = FindBlockStart(lines, classBoundaries[ci]);
 
-        // Preamble = lines[1..blockStarts[0]-1]
-        // (using-satser, namespace, globala attribut — UTAN den första klassens attribut)
         var preambleSb = new StringBuilder();
         for (int i = 1; i < blockStarts[0]; i++)
         {
@@ -319,7 +296,6 @@ public class ChunkingService : IChunkingService
 
             if (ci == 0)
             {
-                // Enhet 0: original fil-header (lines[0]) + allt t.o.m. nästa klass.
                 for (int i = 0; i < blockEnd; i++)
                 {
                     sb.Append(lines[i]);
@@ -328,7 +304,6 @@ public class ChunkingService : IChunkingService
             }
             else
             {
-                // Enhet k: fortsättningsheader + preamble + klass k-blocket.
                 sb.Append($"==== {filePath} (forts.) ====\n");
                 if (preamble.Length > 0)
                     sb.Append(preamble);
@@ -346,10 +321,6 @@ public class ChunkingService : IChunkingService
         return result;
     }
 
-    /// <summary>
-    /// Hittar det verkliga startindexet för ett klass-block genom att gå bakåt
-    /// från klass-deklarationsraden över [Attribut]-rader och kommentarer.
-    /// </summary>
     private static int FindBlockStart(string[] lines, int classLineIndex)
     {
         int blockStart = classLineIndex;
@@ -372,17 +343,26 @@ public class ChunkingService : IChunkingService
 
     // ─────────────────────────────────────────────────────────────────
     //  Fallback: splittra rad för rad
-    //  Används BARA när en enskild klass överstiger maxTokensPerChunk.
+    //
+    //  ROTORSAKSFIX: Tidigare skapades continuation-chunks utan ==== header ====.
+    //  Det fick resten av stora filer (t.ex. ChunkingService.cs, MainViewModel.cs)
+    //  att se ut som "saknad" kod — den fanns i nästa chunk men utan filkontext.
+    //  Nu prefixas varje continuation-chunk med ==== path (forts. rad N) ====.
     // ─────────────────────────────────────────────────────────────────
 
     private List<CodeChunk> SplitByLines(
         string projectName,
+        string filePath,
         string unit,
         int maxTokensPerChunk,
         ref int globalIndex)
     {
         var result = new List<CodeChunk>();
         var lines = unit.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+        // Räkna rader vi faktiskt skriver ut för att ge ett meningsfullt rad-nummer i headern.
+        int continuationLine = 1;
+
         var buffer = new StringBuilder();
         int tokens = 0;
 
@@ -400,7 +380,8 @@ public class ChunkingService : IChunkingService
                     tokens = 0;
                 }
                 result.AddRange(
-                    SplitLongLine(projectName, lineWithNl, maxTokensPerChunk, ref globalIndex));
+                    SplitLongLine(projectName, filePath, lineWithNl, maxTokensPerChunk, ref globalIndex));
+                continuationLine++;
                 continue;
             }
 
@@ -409,10 +390,16 @@ public class ChunkingService : IChunkingService
                 result.Add(Finalize(globalIndex++, projectName, buffer.ToString(), tokens));
                 buffer.Clear();
                 tokens = 0;
+
+                // Continuation-header: visar vilken fil och ungefär var i filen vi är.
+                var contHeader = $"==== {filePath} (forts. rad ~{continuationLine}) ====\n";
+                buffer.Append(contHeader);
+                tokens += EstimateTokens(contHeader);
             }
 
             buffer.Append(lineWithNl);
             tokens += lineTokens;
+            continuationLine++;
         }
 
         if (buffer.Length > 0)
@@ -423,6 +410,7 @@ public class ChunkingService : IChunkingService
 
     private List<CodeChunk> SplitLongLine(
         string projectName,
+        string filePath,
         string line,
         int maxTokensPerChunk,
         ref int globalIndex)
@@ -434,7 +422,9 @@ public class ChunkingService : IChunkingService
         while (offset < line.Length)
         {
             int length = Math.Min(maxChars, line.Length - offset);
-            string segment = line.Substring(offset, length);
+            string segment = offset == 0
+                ? line.Substring(offset, length)
+                : $"==== {filePath} (forts.) ====\n" + line.Substring(offset, length);
             result.Add(Finalize(globalIndex++, projectName,
                 segment, EstimateTokens(segment)));
             offset += length;
