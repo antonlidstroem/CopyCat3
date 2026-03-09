@@ -478,7 +478,7 @@
                                     BackgroundColor="{Binding IsCopied, Converter={StaticResource ChunkBgConv}}"
                                     Stroke="{Binding IsCopied, Converter={StaticResource ChunkBorderConv}}">
 
-                                <Grid ColumnDefinitions="*,Auto">
+                                <Grid ColumnDefinitions="*,Auto,Auto">
 
                                     <!-- Copy area: tap triggers CopyChunkCommand -->
                                     <Grid Grid.Column="0"
@@ -503,13 +503,23 @@
                                         </Grid.GestureRecognizers>
                                     </Grid>
 
-                                    <!-- Preview button in its own column — tap is isolated -->
+                                    <!-- Share button — opens platform share sheet -->
                                     <Button Grid.Column="1"
+                                            Style="{StaticResource IconBtn}"
+                                            Text="↑"
+                                            FontSize="20"
+                                            VerticalOptions="Center"
+                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ShareChunkCommand}"
+                                            CommandParameter="{Binding .}"
+                                            ToolTipProperties.Text="Dela via…" />
+
+                                    <!-- Preview button — shows file list -->
+                                    <Button Grid.Column="2"
                                             Style="{StaticResource IconBtn}"
                                             Text="ⓘ"
                                             FontSize="20"
                                             VerticalOptions="Center"
-                                            Margin="0,0,8,0"
+                                            Margin="0,0,4,0"
                                             Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ShowPreviewCommand}"
                                             CommandParameter="{Binding .}"
                                             ToolTipProperties.Text="Visa filer i denna chunk" />

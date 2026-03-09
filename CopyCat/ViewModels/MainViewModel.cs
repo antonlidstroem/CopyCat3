@@ -29,7 +29,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _accessToken = string.Empty;
 
     [ObservableProperty]
-    private string _branch = "main";
+    private string _branch = "master";
 
     [ObservableProperty]
     private bool _tokenIsSaved;
@@ -429,6 +429,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             StatusText = $"⚠️ Kunde inte kopiera: {ex.Message}";
             _logger.LogWarning(ex, "Kunde inte kopiera chunk till urklipp.");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShareChunkAsync(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        try
+        {
+            var title = $"Chunk {chunk.Index + 1} · {chunk.ProjectName}";
+            await _clipboard.ShareAsync(chunk.Content, title);
+            // Mark as copied so the UI gives the same visual feedback.
+            chunk.IsCopied = true;
+            CopiedCount = Chunks.Count(c => c.IsCopied);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"⚠️ Kunde inte dela: {ex.Message}";
+            _logger.LogWarning(ex, "Kunde inte dela chunk via share sheet.");
         }
     }
 
