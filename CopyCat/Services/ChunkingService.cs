@@ -6,7 +6,7 @@ namespace CopyCat.Services;
 
 public class ChunkingService : IChunkingService
 {
-    private const double CharsPerToken = 4.0;
+    private const double CharsPerToken = 3.0;
     private const string FileSeparator = "\n\n";
 
     // Matchar typdeklarationer (class / struct / record / interface / enum) på valfritt djup.
