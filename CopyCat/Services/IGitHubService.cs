@@ -8,7 +8,7 @@ public interface IGitHubService
         string?             accessToken,
         string              branch,
         IEnumerable<string> excludedFolders,
-        IEnumerable<string> excludedFilePatterns,
+        //IEnumerable<string> excludedFilePatterns,
         IProgress<string>?  progress          = null,
         CancellationToken   cancellationToken = default);
 }

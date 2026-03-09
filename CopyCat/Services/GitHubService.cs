@@ -1,17 +1,11 @@
-using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net.Http.Headers;
-using System.Text.RegularExpressions;
 
 namespace CopyCat.Services;
 
 public class GitHubService : IGitHubService
 {
     private readonly IHttpClientFactory _httpFactory;
-
-    // Cache compiled glob→regex conversions so we don't recompile on every file.
-    // Key: glob pattern string. Value: compiled Regex.
-    private static readonly ConcurrentDictionary<string, Regex> GlobCache = new();
 
     public GitHubService(IHttpClientFactory httpFactory)
     {
@@ -24,7 +18,6 @@ public class GitHubService : IGitHubService
         string?             accessToken,
         string              branch,
         IEnumerable<string> excludedFolders,
-        IEnumerable<string> excludedFilePatterns,
         IProgress<string>?  progress          = null,
         CancellationToken   cancellationToken = default)
     {
@@ -38,11 +31,6 @@ public class GitHubService : IGitHubService
             .Select(f => f.ToLowerInvariant().Trim('/'))
             .ToHashSet();
 
-        // Materialise once; filter out blank/null entries defensively.
-        var patternList = excludedFilePatterns
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .ToList();
-
         bool useApi = !string.IsNullOrWhiteSpace(accessToken);
 
         progress?.Report($"Ansluter till {owner}/{repo}…");
@@ -55,10 +43,13 @@ public class GitHubService : IGitHubService
                   .Where(b => !b.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase)))
               .ToArray();
 
-        byte[]? zipBytes   = null;
-        string? usedBranch = null;
+        // FIX 1: "using var" säkerställer att HttpClient-objektet disposed efter varje anrop.
+        // IHttpClientFactory pooler den underliggande HttpClientHandler, men
+        // HttpClient-omslaget ska ändå kasseras för att undvika läckor vid upprepade hämtningar.
+        using var http = _httpFactory.CreateClient("github");
 
-        var http = _httpFactory.CreateClient("github");
+        HttpResponseMessage? successResponse = null;
+        string?              usedBranch      = null;
 
         foreach (var candidate in candidates)
         {
@@ -72,7 +63,7 @@ public class GitHubService : IGitHubService
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
                 if (useApi)
                 {
                     request.Headers.Authorization =
@@ -86,18 +77,34 @@ public class GitHubService : IGitHubService
                     cancellationToken);
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    response.Dispose();
                     continue;
+                }
+
+                // FIX: Specifik hantering av 403 för att tydliggöra rate-limit-fel.
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    response.Dispose();
+                    throw new InvalidOperationException(
+                        "GitHub nekade åtkomst (403 Forbidden). " +
+                        "Du kan ha nått API-gränsen för anonym användning. " +
+                        "Ange ett GitHub-token för att höja gränsen.");
+                }
 
                 if (!response.IsSuccessStatusCode)
+                {
+                    response.Dispose();
                     throw new InvalidOperationException(
                         $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'. " +
                         (useApi
                             ? "Kontrollera att token är giltig och har rätt behörighet."
                             : "Kontrollera att repot existerar och är publikt."));
+                }
 
-                progress?.Report($"Laddar ned arkiv (gren: '{candidate}')…");
-                zipBytes   = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-                usedBranch = candidate;
+                // Håll response vid liv — strömmen läses efter loopen.
+                successResponse = response;
+                usedBranch      = candidate;
                 break;
             }
             catch (OperationCanceledException) { throw; }
@@ -108,7 +115,7 @@ public class GitHubService : IGitHubService
             }
         }
 
-        if (zipBytes is null)
+        if (successResponse is null)
             throw new InvalidOperationException(
                 $"Repot '{owner}/{repo}' hittades inte på någon gren " +
                 $"(provade: {string.Join(", ", candidates)}). " +
@@ -119,57 +126,73 @@ public class GitHubService : IGitHubService
         {
             progress?.Report(
                 $"⚠️ Gren '{trimmedBranch}' hittades inte — använde '{usedBranch}' istället.");
+
             await Task.Delay(1500, cancellationToken);
         }
 
-        progress?.Report("Packar upp och filtrerar…");
+        progress?.Report("Laddar ned och packar upp…");
 
         var results = new List<(string Path, string Content)>();
 
-        using var memStream = new MemoryStream(zipBytes);
-        using var archive   = new ZipArchive(memStream, ZipArchiveMode.Read);
-
-        foreach (var entry in archive.Entries)
+        // FIX 2: Ström-baserad nedladdning eliminerar en hel kopia av ZIP-filen i minnet.
+        //
+        // TIDIGARE (2× minnesåtgång):
+        //   zipBytes  = ReadAsByteArrayAsync()   → allokerar byte[] med hela ZIPen
+        //   memStream = new MemoryStream(zipBytes) → kopierar byte[] till en ny buffer
+        //
+        // NU (1× minnesåtgång):
+        //   ReadAsStreamAsync() → nätverksström, ingen heap-allokering
+        //   CopyToAsync(memStream) → en enda MemoryStream-buffer
+        //
+        // ZipArchive kräver en sökbar ström (seek), så vi måste buffra till MemoryStream,
+        // men vi undviker den extra byte[]-kopian som ReadAsByteArrayAsync skapade.
+        using (successResponse)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            using var responseStream = await successResponse.Content
+                .ReadAsStreamAsync(cancellationToken);
 
-            if (entry.FullName.EndsWith('/')) continue;
+            var memStream = new MemoryStream();
+            await responseStream.CopyToAsync(memStream, cancellationToken);
+            memStream.Position = 0;
 
-            var slash        = entry.FullName.IndexOf('/');
-            var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
+            using var archive = new ZipArchive(memStream, ZipArchiveMode.Read);
 
-            if (string.IsNullOrEmpty(relativePath))                       continue;
-            if (IsInExcludedFolder(relativePath, excludedSet))            continue;
-
-            var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
-            if (!extSet.Contains(ext))                                    continue;
-
-            // Skip files whose name matches any enabled glob pattern.
-            if (patternList.Count > 0 &&
-                patternList.Any(p => MatchesGlob(entry.Name, p)))         continue;
-
-            try
+            foreach (var entry in archive.Entries)
             {
-                using var stream = entry.Open();
-                using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
-                results.Add((relativePath, await reader.ReadToEndAsync(cancellationToken)));
-            }
-            catch
-            {
-                results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (entry.FullName.EndsWith('/')) continue;
+
+                var slash        = entry.FullName.IndexOf('/');
+                var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
+
+                if (string.IsNullOrEmpty(relativePath))            continue;
+                if (IsInExcludedFolder(relativePath, excludedSet)) continue;
+
+                var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
+                if (!extSet.Contains(ext)) continue;
+
+                try
+                {
+                    using var stream = entry.Open();
+                    using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+                    results.Add((relativePath, await reader.ReadToEndAsync(cancellationToken)));
+                }
+                catch
+                {
+                    results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
+                }
             }
         }
 
         if (results.Count == 0)
             throw new InvalidOperationException(
                 "Inga filer hittades med de valda filtyperna. " +
-                "Kontrollera att du valt rätt filtyper och att filtren inte blockerar allt.");
+                "Kontrollera att du valt rätt filtyper och att mappfiltren inte blockerar allt.");
 
         progress?.Report($"Klart! {results.Count} filer från '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {
@@ -180,27 +203,5 @@ public class GitHubService : IGitHubService
                 return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Matches a file name against a glob pattern supporting * (any chars) and
-    /// ? (single char), case-insensitive.
-    ///
-    /// Compiled Regex instances are cached in GlobCache so each unique pattern
-    /// is only compiled once across the entire fetch operation.
-    /// </summary>
-    private static bool MatchesGlob(string fileName, string pattern)
-    {
-        var regex = GlobCache.GetOrAdd(pattern, p =>
-        {
-            var regexStr = "^" +
-                Regex.Escape(p)
-                     .Replace("\\*", ".*")
-                     .Replace("\\?", ".") +
-                "$";
-            return new Regex(regexStr, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        });
-
-        return regex.IsMatch(fileName);
     }
 }

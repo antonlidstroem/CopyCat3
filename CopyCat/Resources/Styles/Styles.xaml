@@ -5,7 +5,7 @@
                     x:Class="CopyCat.Resources.Styles.Styles">
 
     <!-- ══════════════════════════════════════════════════════════
-         COLORS — defined first so every StaticResource below resolves.
+         COLORS
          ══════════════════════════════════════════════════════════ -->
 
     <Color x:Key="BgApp">#111118</Color>
@@ -19,6 +19,9 @@
     <Color x:Key="BgChunkDefault">#1A1A2E</Color>
     <Color x:Key="BgChunkCopied">#1A2E20</Color>
 
+    <!-- Multi-select: markerad chunk har en distinkt blå bakgrund -->
+    <Color x:Key="BgChunkSelected">#17213A</Color>
+
     <Color x:Key="AccentPrimary">#5B8EFF</Color>
     <Color x:Key="AccentPrimaryLight">#7BACFF</Color>
     <Color x:Key="AccentPrimaryBg">#1A5B8EFF</Color>
@@ -26,6 +29,10 @@
     <Color x:Key="AccentGreen">#22C55E</Color>
     <Color x:Key="AccentGreenBg">#3322C55E</Color>
     <Color x:Key="AccentGreenBorder">#3322C55E</Color>
+
+    <!-- Toolbar för multi-select -->
+    <Color x:Key="BgSelectionToolbar">#1A2240</Color>
+    <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
 
     <Color x:Key="TextPrimary">#E0E0FF</Color>
     <Color x:Key="TextSecondary">#A0A0C0</Color>
@@ -42,8 +49,9 @@
     <Color x:Key="BorderError">#C03030</Color>
     <Color x:Key="BorderChipOn">#22C55E</Color>
     <Color x:Key="BorderChipOff">#2D2D4A</Color>
-    <Color x:Key="BorderChunkDefault">#5B8EFF</Color>
+    <Color x:Key="BorderChunkDefault">#2D2D4A</Color>
     <Color x:Key="BorderChunkCopied">#22C55E</Color>
+    <Color x:Key="BorderChunkSelected">#5B8EFF</Color>
 
     <Color x:Key="SliderTrackActive">#5B8EFF</Color>
     <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
@@ -51,11 +59,10 @@
     <Color x:Key="ActivityIndicatorColor">#5B8EFF</Color>
 
     <!-- ══════════════════════════════════════════════════════════
-         CONVERTERS — defined after colors so StaticResource resolves.
-         Placed here so MainPage.xaml needs no ContentPage.Resources block.
+         CONVERTERS
          ══════════════════════════════════════════════════════════ -->
 
-    <!-- Chip (file type / folder toggle) -->
+    <!-- Chip -->
     <conv:BoolToColorConverter x:Key="ChipBorderConv"
                                TrueColor="{StaticResource BorderChipOn}"
                                FalseColor="{StaticResource BorderChipOff}" />
@@ -63,7 +70,7 @@
                                TrueColor="{StaticResource BgChipOn}"
                                FalseColor="{StaticResource BgChipOff}" />
 
-    <!-- Chunk button -->
+    <!-- Chunk kopierad-tillstånd (oförändrat) -->
     <conv:BoolToColorConverter x:Key="ChunkBorderConv"
                                TrueColor="{StaticResource BorderChunkCopied}"
                                FalseColor="{StaticResource BorderChunkDefault}" />
@@ -71,11 +78,26 @@
                                TrueColor="{StaticResource BgChunkCopied}"
                                FalseColor="{StaticResource BgChunkDefault}" />
 
-    <conv:InverseBoolConverter       x:Key="InverseBool" />
-    <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
-    <conv:BoolToStringConverter      x:Key="ExpandArrowConv"
-                                     TrueValue="▲"
-                                     FalseValue="▼" />
+    <!-- Chunk markerad-tillstånd — blå border/bakgrund när IsSelected=true -->
+    <conv:BoolToColorConverter x:Key="ChunkSelectedBorderConv"
+                               TrueColor="{StaticResource BorderChunkSelected}"
+                               FalseColor="{StaticResource BorderChunkDefault}" />
+    <conv:BoolToColorConverter x:Key="ChunkSelectedBgConv"
+                               TrueColor="{StaticResource BgChunkSelected}"
+                               FalseColor="{StaticResource BgChunkDefault}" />
+
+    <conv:InverseBoolConverter        x:Key="InverseBool" />
+    <conv:IntGreaterThanZeroConverter  x:Key="IntGtZero" />
+    <conv:BoolToStringConverter        x:Key="ExpandArrowConv"
+                                       TrueValue="▲"
+                                       FalseValue="▼" />
+
+    <!-- Instruktionstext bredvid CHUNKS-rubriken:
+         Ingen markering → visa "håll för att markera"
+         Markering aktiv → visa tom sträng (toolbar visar info istället) -->
+    <conv:BoolToStringConverter        x:Key="SelectionHintConv"
+                                       TrueValue=""
+                                       FalseValue="kryssa för att markera" />
 
     <!-- ══════════════════════════════════════════════════════════
          GLOBAL ELEMENT DEFAULTS
@@ -198,6 +220,42 @@
         <Setter Property="Padding"              Value="8,0" />
         <Setter Property="MinimumHeightRequest" Value="50" />
         <Setter Property="MinimumWidthRequest"  Value="44" />
+    </Style>
+
+    <!-- Dela-knappen i multi-select toolbar — accentfärg, kompaktare -->
+    <Style x:Key="ShareBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextOnAccent}" />
+        <Setter Property="FontSize"             Value="14" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="42" />
+        <Setter Property="Padding"              Value="16,0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         MULTI-SELECT TOOLBAR
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="SelectionToolbarBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSelectionToolbar}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderSelectionToolbar}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="Padding"         Value="14,10" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="SelectionCountLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource AccentPrimaryLight}" />
+        <Setter Property="FontSize"       Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <Style x:Key="SelectionTokensLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"  Value="11" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
