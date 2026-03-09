@@ -12,7 +12,7 @@ public partial class CodeChunk : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayLabel))]
     [NotifyPropertyChangedFor(nameof(SubLabel))]
-    private bool _isCopied;
+    protected bool _isCopied;
 
     public string DisplayLabel =>
         IsCopied
@@ -44,10 +44,12 @@ public partial class CodeChunk : ObservableObject
             // Strip the ==== prefix and ==== suffix
             var raw = t[5..^5].Trim();
 
-            // Strip continuation suffix added by ChunkingService
-            // e.g. "path (forts.)" → "path"
-            if (raw.EndsWith(" (forts.)"))
-                raw = raw[..^9].TrimEnd();
+            // Strip any continuation suffix added by ChunkingService:
+            //   "path (forts.)"         – type-level split
+            //   "path (forts. rad ~42)" – line-level split
+            var fortsIdx = raw.IndexOf(" (forts.", StringComparison.Ordinal);
+            if (fortsIdx >= 0)
+                raw = raw[..fortsIdx].TrimEnd();
 
             if (!string.IsNullOrEmpty(raw) && seen.Add(raw))
                 names.Add(raw);
