@@ -20,8 +20,8 @@ public class PromptRecord
 
 public partial class PromptItem : ObservableObject
 {
-    public int    Id        { get; set; }
-    public bool   IsBuiltIn { get; set; }
+    public int  Id        { get; set; }
+    public bool IsBuiltIn { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewText))]
@@ -33,19 +33,35 @@ public partial class PromptItem : ObservableObject
 
     // ── Edit-mode state ────────────────────────────────────────────────────
 
-    [ObservableProperty]
-    private bool _isEditing;
+    [ObservableProperty] private bool   _isEditing;
+    [ObservableProperty] private string _editTitle   = string.Empty;
+    [ObservableProperty] private string _editContent = string.Empty;
+
+    // ── Copy feedback — card turns green ──────────────────────────────────
 
     [ObservableProperty]
-    private string _editTitle = string.Empty;
-
-    [ObservableProperty]
-    private string _editContent = string.Empty;
-
-    // ── Copy feedback ──────────────────────────────────────────────────────
-
-    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderColor))]
     private bool _isCopied;
+
+    // ── Single-select for share — card turns blue ─────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    private bool _isSelectedForShare;
+
+    // ── Card colours: copied (green) > selected (blue) > default ──────────
+
+    public Color CardBackgroundColor =>
+        IsCopied           ? Color.FromArgb("#1A2E20") :
+        IsSelectedForShare ? Color.FromArgb("#17213A") :
+                             Color.FromArgb("#181826");
+
+    public Color CardBorderColor =>
+        IsCopied           ? Color.FromArgb("#22C55E") :
+        IsSelectedForShare ? Color.FromArgb("#5B8EFF") :
+                             Color.FromArgb("#252540");
 
     // ── Derived ───────────────────────────────────────────────────────────
 
@@ -54,22 +70,13 @@ public partial class PromptItem : ObservableObject
 
     // ── Factory ───────────────────────────────────────────────────────────
 
-    public static PromptItem FromRecord(PromptRecord r) =>
-        new()
-        {
-            Id        = r.Id,
-            Title     = r.Title,
-            Content   = r.Content,
-            IsBuiltIn = r.IsBuiltIn,
-        };
+    public static PromptItem FromRecord(PromptRecord r) => new()
+    {
+        Id = r.Id, Title = r.Title, Content = r.Content, IsBuiltIn = r.IsBuiltIn,
+    };
 
-    public PromptRecord ToRecord(int sortOrder = 0) =>
-        new()
-        {
-            Id        = Id,
-            Title     = Title,
-            Content   = Content,
-            IsBuiltIn = IsBuiltIn,
-            SortOrder = sortOrder,
-        };
+    public PromptRecord ToRecord(int sortOrder = 0) => new()
+    {
+        Id = Id, Title = Title, Content = Content, IsBuiltIn = IsBuiltIn, SortOrder = sortOrder,
+    };
 }

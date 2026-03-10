@@ -43,19 +43,30 @@ public partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasBranchOptions));
     }
 
-    [ObservableProperty] private string _accessToken  = string.Empty;
-    [ObservableProperty] private string _branch       = "developer";
-    [ObservableProperty] private bool   _tokenIsSaved;
+    [ObservableProperty] private string _accessToken = string.Empty;
 
-    [ObservableProperty] private bool _isFileTypesExpanded    = false;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BranchButtonLabel))]
+    private string _branch = "main";
+
+    [ObservableProperty] private bool _tokenIsSaved;
+
+    [ObservableProperty] private bool _isFileTypesExpanded;
     [ObservableProperty] private bool _isFoldersExpanded;
     [ObservableProperty] private bool _isFilePatternsExpanded;
     [ObservableProperty] private bool _isPromptsExpanded;
+    [ObservableProperty] private bool _isKeywordExpanded;
     [ObservableProperty] private bool _isFetchingBranches;
 
     [ObservableProperty] private string _keywordFilter      = string.Empty;
     [ObservableProperty] private string _customFolderInput  = string.Empty;
     [ObservableProperty] private string _customPatternInput = string.Empty;
+
+    // ── Branch button label ────────────────────────────────────────────────
+
+    /// <summary>Text shown on the branch button; falls back to placeholder when empty.</summary>
+    public string BranchButtonLabel =>
+        string.IsNullOrWhiteSpace(Branch) ? "Select branch…" : Branch;
 
     // ── Slider ─────────────────────────────────────────────────────────────
 
@@ -79,10 +90,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public Color SliderWarningColor => (int)MaxTokensPerChunk switch
     {
-        < 2000                  => Color.FromArgb("#FF7070"),
-        >= 4097 and < 8193      => Color.FromArgb("#22C55E"),
-        >= 25001                => Color.FromArgb("#FF7070"),
-        _                       => Color.FromArgb("#A0A0C0"),
+        < 2000             => Color.FromArgb("#FF7070"),
+        >= 4097 and < 8193 => Color.FromArgb("#22C55E"),
+        >= 25001           => Color.FromArgb("#FF7070"),
+        _                  => Color.FromArgb("#A0A0C0"),
     };
 
     [ObservableProperty]
@@ -124,6 +135,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // ── Saved repos ────────────────────────────────────────────────────────
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedRepo))]
     private SavedRepo? _selectedSavedRepo;
 
     partial void OnSelectedSavedRepoChanged(SavedRepo? value)
@@ -135,17 +147,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _ = LoadTokenForRepoAsync(value);
     }
 
-    public bool HasSavedRepos => SavedRepos.Count > 0;
+    public bool HasSavedRepos  => SavedRepos.Count > 0;
+    public bool HasSelectedRepo => SelectedSavedRepo is not null;
+
+    // ── Prompt selection for share ─────────────────────────────────────────
+
+    /// <summary>The single prompt currently checked for inclusion in shares, or null.</summary>
+    public PromptItem? SelectedPrompt => Prompts.FirstOrDefault(p => p.IsSelectedForShare);
 
     // ── Collections ────────────────────────────────────────────────────────
 
-    public ObservableCollection<CodeChunk>        Chunks             { get; } = [];
-    public ObservableCollection<FileTypeFilter>   FileTypeFilters    { get; } = [];
-    public ObservableCollection<FolderFilter>     FolderFilters      { get; } = [];
+    public ObservableCollection<CodeChunk>         Chunks             { get; } = [];
+    public ObservableCollection<FileTypeFilter>    FileTypeFilters    { get; } = [];
+    public ObservableCollection<FolderFilter>      FolderFilters      { get; } = [];
     public ObservableCollection<FilePatternFilter> FilePatternFilters { get; } = [];
-    public ObservableCollection<string>           BranchOptions      { get; } = [];
-    public ObservableCollection<SavedRepo>        SavedRepos         { get; } = [];
-    public ObservableCollection<PromptItem>       Prompts            { get; } = [];
+    public ObservableCollection<string>            BranchOptions      { get; } = [];
+    public ObservableCollection<SavedRepo>         SavedRepos         { get; } = [];
+    public ObservableCollection<PromptItem>        Prompts            { get; } = [];
 
     public bool HasBranchOptions => BranchOptions.Count > 0;
 
@@ -182,7 +200,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_initialized) return;
         _initialized = true;
 
-        try { await _db.InitializeAsync(); } catch (Exception ex) { _logger.LogWarning(ex, "DB init failed."); }
+        try { await _db.InitializeAsync(); }
+        catch (Exception ex) { _logger.LogWarning(ex, "DB init failed."); }
 
         try
         {
@@ -250,35 +269,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         var filters = new[]
         {
-            new FileTypeFilter { Label = ".cs",       Extensions = [".cs"],               IsEnabled = true  },
-            new FileTypeFilter { Label = ".xaml",     Extensions = [".xaml"],             IsEnabled = true  },
-            new FileTypeFilter { Label = ".json",     Extensions = [".json"],             IsEnabled = true  },
-            new FileTypeFilter { Label = ".csproj",   Extensions = [".csproj"],           IsEnabled = true  },
-            new FileTypeFilter { Label = ".css",      Extensions = [".css"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".scss",     Extensions = [".scss", ".sass"],    IsEnabled = false },
-            new FileTypeFilter { Label = ".html",     Extensions = [".html", ".htm"],     IsEnabled = false },
-            new FileTypeFilter { Label = ".razor",    Extensions = [".razor", ".cshtml"], IsEnabled = false },
-            new FileTypeFilter { Label = ".js",       Extensions = [".js", ".mjs"],       IsEnabled = false },
-            new FileTypeFilter { Label = ".ts",       Extensions = [".ts", ".tsx"],       IsEnabled = false },
-            new FileTypeFilter { Label = ".jsx",      Extensions = [".jsx"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".vue",      Extensions = [".vue"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".py",       Extensions = [".py"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".java",     Extensions = [".java"],             IsEnabled = false },
-            new FileTypeFilter { Label = ".kt",       Extensions = [".kt"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".swift",    Extensions = [".swift"],            IsEnabled = false },
-            new FileTypeFilter { Label = ".c/.h",     Extensions = [".c", ".h"],          IsEnabled = false },
-            new FileTypeFilter { Label = ".cpp",      Extensions = [".cpp", ".hpp"],      IsEnabled = false },
-            new FileTypeFilter { Label = ".go",       Extensions = [".go"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".rs",       Extensions = [".rs"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".rb",       Extensions = [".rb"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".php",      Extensions = [".php"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".xml",      Extensions = [".xml"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".yaml",     Extensions = [".yaml", ".yml"],     IsEnabled = false },
-            new FileTypeFilter { Label = ".md",       Extensions = [".md"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".sql",      Extensions = [".sql"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".proto",    Extensions = [".proto"],            IsEnabled = false },
-            new FileTypeFilter { Label = ".tf",       Extensions = [".tf"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".sh/.ps1",  Extensions = [".sh", ".ps1"],       IsEnabled = false },
+            new FileTypeFilter { Label = ".cs",      Extensions = [".cs"],               IsEnabled = true  },
+            new FileTypeFilter { Label = ".xaml",    Extensions = [".xaml"],             IsEnabled = true  },
+            new FileTypeFilter { Label = ".json",    Extensions = [".json"],             IsEnabled = true  },
+            new FileTypeFilter { Label = ".csproj",  Extensions = [".csproj"],           IsEnabled = true  },
+            new FileTypeFilter { Label = ".css",     Extensions = [".css"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".scss",    Extensions = [".scss", ".sass"],    IsEnabled = false },
+            new FileTypeFilter { Label = ".html",    Extensions = [".html", ".htm"],     IsEnabled = false },
+            new FileTypeFilter { Label = ".razor",   Extensions = [".razor", ".cshtml"], IsEnabled = false },
+            new FileTypeFilter { Label = ".js",      Extensions = [".js", ".mjs"],       IsEnabled = false },
+            new FileTypeFilter { Label = ".ts",      Extensions = [".ts", ".tsx"],       IsEnabled = false },
+            new FileTypeFilter { Label = ".jsx",     Extensions = [".jsx"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".vue",     Extensions = [".vue"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".py",      Extensions = [".py"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".java",    Extensions = [".java"],             IsEnabled = false },
+            new FileTypeFilter { Label = ".kt",      Extensions = [".kt"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".swift",   Extensions = [".swift"],            IsEnabled = false },
+            new FileTypeFilter { Label = ".c/.h",    Extensions = [".c", ".h"],          IsEnabled = false },
+            new FileTypeFilter { Label = ".cpp",     Extensions = [".cpp", ".hpp"],      IsEnabled = false },
+            new FileTypeFilter { Label = ".go",      Extensions = [".go"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".rs",      Extensions = [".rs"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".rb",      Extensions = [".rb"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".php",     Extensions = [".php"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".xml",     Extensions = [".xml"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".yaml",    Extensions = [".yaml", ".yml"],     IsEnabled = false },
+            new FileTypeFilter { Label = ".md",      Extensions = [".md"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".sql",     Extensions = [".sql"],              IsEnabled = false },
+            new FileTypeFilter { Label = ".proto",   Extensions = [".proto"],            IsEnabled = false },
+            new FileTypeFilter { Label = ".tf",      Extensions = [".tf"],               IsEnabled = false },
+            new FileTypeFilter { Label = ".sh/.ps1", Extensions = [".sh", ".ps1"],       IsEnabled = false },
         };
 
         foreach (var f in filters)
@@ -292,8 +311,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void InitFolderFilters()
     {
-        foreach (var name in new[] { "bin", "obj", ".git", ".vs", "node_modules",
-            "packages", "dist", "build", ".idea", "__pycache__", ".gradle", "out", ".next" })
+        foreach (var name in new[] {
+            "bin", "obj", ".git", ".vs", "node_modules", "packages",
+            "dist", "build", ".idea", "__pycache__", ".gradle", "out", ".next" })
             FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
     }
 
@@ -344,13 +364,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool CanFetch() =>
         !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl) && FileTypeFilters.Any(f => f.IsEnabled);
 
-    private List<string>      GetSelectedExtensions()  => FileTypeFilters.Where(f => f.IsEnabled).SelectMany(f => f.Extensions).ToList();
-    private IEnumerable<string> GetExcludedFolders()   => FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name);
-    private IEnumerable<string> GetExcludedFilePatterns() => FilePatternFilters.Where(f => f.IsEnabled).Select(f => f.Pattern);
+    private List<string>        GetSelectedExtensions()    => FileTypeFilters.Where(f => f.IsEnabled).SelectMany(f => f.Extensions).ToList();
+    private IEnumerable<string> GetExcludedFolders()       => FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name);
+    private IEnumerable<string> GetExcludedFilePatterns()  => FilePatternFilters.Where(f => f.IsEnabled).Select(f => f.Pattern);
 
     private static bool IsLocalPath(string p) =>
         (p.Length >= 3 && char.IsLetter(p[0]) && p[1] == ':')
         || p.StartsWith('/') || p.StartsWith('~') || p.StartsWith("\\\\");
+
+    /// <summary>Prepends the selected prompt (if any) to a share payload.</summary>
+    private string WithPrompt(string text)
+    {
+        var prompt = SelectedPrompt;
+        return prompt is null ? text : $"{prompt.Content}\n\n{text}";
+    }
 
     private async Task SaveCurrentRepoAsync(string url, string branch)
     {
@@ -369,7 +396,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
             else
             {
-                var repo = new SavedRepo { Url = url, Branch = branch, HasToken = !string.IsNullOrWhiteSpace(AccessToken) };
+                var repo = new SavedRepo
+                {
+                    Url      = url,
+                    Branch   = branch,
+                    HasToken = !string.IsNullOrWhiteSpace(AccessToken)
+                };
                 repo = await _db.UpsertRepoAsync(repo);
                 if (!string.IsNullOrWhiteSpace(AccessToken))
                     await SecureStorage.Default.SetAsync($"repo_token_{repo.Id}", AccessToken);
@@ -380,7 +412,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save repo."); }
     }
 
-    // ── Commands ───────────────────────────────────────────────────────────
+    // ── Fetch ──────────────────────────────────────────────────────────────
 
     [RelayCommand(CanExecute = nameof(CanFetch))]
     private async Task FetchAsync()
@@ -435,7 +467,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             StatusText = $"Chunking {files.Count} files…";
 
             var token  = _cts.Token;
-            var chunks = await Task.Run(() => _chunkingService.CreateChunks(files, (int)MaxTokensPerChunk, token), token);
+            var chunks = await Task.Run(
+                () => _chunkingService.CreateChunks(files, (int)MaxTokensPerChunk, token), token);
 
             TotalTokens   = chunks.Sum(c => c.EstimatedTokens);
             TotalProjects = chunks.Select(c => c.ProjectName).Distinct().Count();
@@ -456,29 +489,43 @@ public partial class MainViewModel : ObservableObject, IDisposable
         finally { IsBusy = false; }
     }
 
+    // ── Branch picker ──────────────────────────────────────────────────────
+
     [RelayCommand]
     private async Task ShowBranchPickerAsync()
     {
         if (string.IsNullOrWhiteSpace(RepoUrl) || !RepoUrl.Contains("github.com"))
-        { StatusText = "⚠️ Enter a valid GitHub URL before loading branches."; return; }
+        {
+            StatusText = "⚠️ Enter a valid GitHub URL before loading branches.";
+            return;
+        }
 
         IsFetchingBranches = true;
         try
         {
             var branches = await _gitHubService.FetchBranchesAsync(RepoUrl.Trim(), AccessToken);
             if (branches.Count == 0)
-            { StatusText = "⚠️ No branches found. A token may be required for branch listing on public repos."; return; }
+            {
+                StatusText = "⚠️ No branches found. A token may be required for branch listing on public repos.";
+                return;
+            }
 
             BranchOptions.Clear();
             foreach (var b in branches) BranchOptions.Add(b);
             OnPropertyChanged(nameof(HasBranchOptions));
             BranchPickerRequested?.Invoke(this, branches);
         }
-        catch (Exception ex) { StatusText = $"⚠️ Could not fetch branches: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            StatusText = $"⚠️ Could not fetch branches: {ex.Message}";
+            _logger.LogWarning(ex, "Branch fetch failed.");
+        }
         finally { IsFetchingBranches = false; }
     }
 
     [RelayCommand] private void Cancel() => _cts?.Cancel();
+
+    // ── Chunk copy / share ─────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task CopyChunkAsync(CodeChunk chunk)
@@ -498,24 +545,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task ShareChunkAsync(CodeChunk chunk)
     {
         if (chunk is null) return;
-        try { await _shareService.ShareTextAsync(chunk.Content, $"Chunk {chunk.Index + 1} · {chunk.ProjectName}"); }
+        try
+        {
+            var payload = WithPrompt(chunk.Content);
+            var title   = $"Chunk {chunk.Index + 1} · {chunk.ProjectName}";
+            await _shareService.ShareTextAsync(payload, title);
+        }
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
-    [RelayCommand] private void TogglePreview(CodeChunk chunk) { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
-    [RelayCommand] private void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
+    [RelayCommand]
+    private void TogglePreview(CodeChunk chunk) { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
+
+    [RelayCommand]
+    private void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ShareSelectedAsync()
     {
         var selected = Chunks.Where(c => c.IsSelected).OrderBy(c => c.Index).ToList();
         if (selected.Count == 0) return;
+
         var sb = new StringBuilder();
         foreach (var c in selected) { if (sb.Length > 0) sb.Append("\n\n"); sb.Append(c.Content); }
+
+        var payload = WithPrompt(sb.ToString());
         var title = selected.Count == 1
             ? $"Chunk {selected[0].Index + 1} · {selected[0].ProjectName}"
             : $"{selected.Count} chunks · {string.Join(", ", selected.Select(c => c.ProjectName).Distinct())}";
-        try { await _shareService.ShareTextAsync(sb.ToString(), title); }
+
+        try { await _shareService.ShareTextAsync(payload, title); }
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
@@ -530,8 +589,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task CopyPromptAsync(PromptItem prompt)
     {
         if (prompt is null) return;
-        try { await _clipboard.SetTextAsync(prompt.Content); foreach (var p in Prompts) p.IsCopied = false; prompt.IsCopied = true; }
+        try
+        {
+            await _clipboard.SetTextAsync(prompt.Content);
+            // Reset all copied states; only this one turns green
+            foreach (var p in Prompts) p.IsCopied = false;
+            prompt.IsCopied = true;
+        }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not copy prompt."); }
+    }
+
+    /// <summary>
+    /// Toggles the single-select checkbox for including a prompt in shares.
+    /// Only one prompt can be selected at a time (radio-button behaviour).
+    /// Tapping an already-selected prompt deselects it.
+    /// </summary>
+    [RelayCommand]
+    private void SelectPromptForShare(PromptItem prompt)
+    {
+        if (prompt is null) return;
+        bool wasSelected = prompt.IsSelectedForShare;
+        foreach (var p in Prompts) p.IsSelectedForShare = false;
+        if (!wasSelected) prompt.IsSelectedForShare = true;
+        OnPropertyChanged(nameof(SelectedPrompt));
     }
 
     [RelayCommand]
@@ -550,7 +630,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save prompt."); }
     }
 
-    [RelayCommand] private void CancelEditPrompt(PromptItem prompt) { if (prompt is not null) prompt.IsEditing = false; }
+    [RelayCommand]
+    private void CancelEditPrompt(PromptItem prompt) { if (prompt is not null) prompt.IsEditing = false; }
 
     [RelayCommand]
     private async Task DeletePromptAsync(PromptItem prompt)
@@ -566,7 +647,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Prompts.Add(new PromptItem { IsEditing = true, EditTitle = "New Prompt", EditContent = "" });
     }
 
-    // ── URL / repo ─────────────────────────────────────────────────────────
+    // ── URL / repo management ──────────────────────────────────────────────
 
     [RelayCommand] private void ClearUrl() => RepoUrl = string.Empty;
 
@@ -577,14 +658,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(text)) RepoUrl = text.Trim().Trim('"');
     }
 
+    /// <summary>Selects a saved repo (fills URL and Branch fields).</summary>
     [RelayCommand]
-    private async Task ClearSavedReposAsync()
+    private void SelectRepo(SavedRepo repo) => SelectedSavedRepo = repo;
+
+    /// <summary>Removes a single saved repo from the database.</summary>
+    [RelayCommand]
+    private async Task DeleteRepoAsync(SavedRepo repo)
     {
-        try { await _db.ClearAllReposAsync(); SavedRepos.Clear(); SelectedSavedRepo = null; }
-        catch (Exception ex) { _logger.LogWarning(ex, "Could not clear saved repos."); }
+        if (repo is null) return;
+        try
+        {
+            await _db.DeleteRepoAsync(repo.Id);
+            // Clear SecureStorage token if present
+            try { SecureStorage.Default.Remove($"repo_token_{repo.Id}"); } catch { /* ignore */ }
+            // If this was the selected repo, deselect
+            if (SelectedSavedRepo?.Id == repo.Id) SelectedSavedRepo = null;
+            await RefreshSavedReposAsync();
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not delete repo {Id}.", repo.Id); }
     }
 
-    [RelayCommand] private void RenameSelectedRepo() { if (SelectedSavedRepo is not null) RepoRenameRequested?.Invoke(this, SelectedSavedRepo); }
+    /// <summary>Clears the current selection (deselects without deleting).</summary>
+    [RelayCommand]
+    private void ClearSelectedRepo() => SelectedSavedRepo = null;
+
+    [RelayCommand]
+    private void RenameSelectedRepo() { if (SelectedSavedRepo is not null) RepoRenameRequested?.Invoke(this, SelectedSavedRepo); }
 
     public async Task SetRepoNameAsync(SavedRepo repo, string name)
     {
@@ -592,6 +692,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         await _db.UpsertRepoAsync(repo);
         await RefreshSavedReposAsync();
     }
+
+    // ── Token ──────────────────────────────────────────────────────────────
 
     [RelayCommand] private void ShowTokenInfo() => TokenInfoRequested?.Invoke(this, EventArgs.Empty);
 
@@ -602,23 +704,48 @@ public partial class MainViewModel : ObservableObject, IDisposable
         AccessToken = string.Empty; TokenIsSaved = false;
     }
 
+    // ── Keyword filter ─────────────────────────────────────────────────────
+
+    [RelayCommand] private void ToggleKeyword()      => IsKeywordExpanded = !IsKeywordExpanded;
     [RelayCommand] private void ClearKeywordFilter() => KeywordFilter = string.Empty;
 
-    // ── Filter toggles ─────────────────────────────────────────────────────
+    // ── Section expand/collapse ────────────────────────────────────────────
 
     [RelayCommand] private void ToggleFileTypes()    => IsFileTypesExpanded    = !IsFileTypesExpanded;
     [RelayCommand] private void ToggleFolders()      => IsFoldersExpanded      = !IsFoldersExpanded;
     [RelayCommand] private void ToggleFilePatterns() => IsFilePatternsExpanded = !IsFilePatternsExpanded;
 
-    [RelayCommand] private void ToggleAllFileTypes()    { bool any = FileTypeFilters.Any(f => f.IsEnabled);    foreach (var f in FileTypeFilters)    f.IsEnabled  = !any; }
-    [RelayCommand] private void ToggleAllFolderFilters(){ bool any = FolderFilters.Any(f => f.IsExcluded);     foreach (var f in FolderFilters)      f.IsExcluded = !any; }
-    [RelayCommand] private void ToggleAllFilePatterns() { bool any = FilePatternFilters.Any(f => f.IsEnabled); foreach (var f in FilePatternFilters) f.IsEnabled  = !any; }
+    // ── Toggle-all helpers ─────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void ToggleAllFileTypes()
+    {
+        bool any = FileTypeFilters.Any(f => f.IsEnabled);
+        foreach (var f in FileTypeFilters) f.IsEnabled = !any;
+    }
+
+    [RelayCommand]
+    private void ToggleAllFolderFilters()
+    {
+        bool any = FolderFilters.Any(f => f.IsExcluded);
+        foreach (var f in FolderFilters) f.IsExcluded = !any;
+    }
+
+    [RelayCommand]
+    private void ToggleAllFilePatterns()
+    {
+        bool any = FilePatternFilters.Any(f => f.IsEnabled);
+        foreach (var f in FilePatternFilters) f.IsEnabled = !any;
+    }
+
+    // ── Custom filter additions ────────────────────────────────────────────
 
     [RelayCommand]
     private void AddCustomFolder()
     {
         var name = CustomFolderInput.Trim();
-        if (string.IsNullOrWhiteSpace(name) || FolderFilters.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
+        if (string.IsNullOrWhiteSpace(name) ||
+            FolderFilters.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
         FolderFilters.Add(new FolderFilter { Name = name, IsExcluded = true });
         CustomFolderInput = string.Empty;
     }
@@ -627,10 +754,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void AddCustomPattern()
     {
         var pattern = CustomPatternInput.Trim();
-        if (string.IsNullOrWhiteSpace(pattern) || FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase))) return;
+        if (string.IsNullOrWhiteSpace(pattern) ||
+            FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase))) return;
         FilePatternFilters.Add(new FilePatternFilter { Pattern = pattern, IsEnabled = true });
         CustomPatternInput = string.Empty;
     }
+
+    // ── Reset ──────────────────────────────────────────────────────────────
 
     [RelayCommand]
     private void Reset()
@@ -641,7 +771,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         StatusText = "Enter a GitHub URL or local path, then press Chunk.";
     }
 
-    // ── Dispose ────────────────────────────────────────────────────────────
+    // ── IDisposable ────────────────────────────────────────────────────────
 
     public void Dispose()
     {
