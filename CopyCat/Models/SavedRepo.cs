@@ -26,6 +26,8 @@ public class SavedRepo
             ? TrimmedUrl
             : $"{Name}  ·  {TrimmedUrl}";
 
+    public override string ToString() => DisplayName;
+
     [Ignore]
     private string TrimmedUrl =>
         Url.Replace("https://github.com/", "")

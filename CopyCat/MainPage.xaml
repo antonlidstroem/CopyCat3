@@ -71,11 +71,12 @@
                         <Border Grid.Column="0" Style="{StaticResource SavedReposPickerBorder}">
                             <Picker Style="{StaticResource InputPicker}"
                                     ItemsSource="{Binding SavedRepos}"
-                                    ItemDisplayBinding="{Binding DisplayName}"
                                     SelectedItem="{Binding SelectedSavedRepo}"
                                     Title="Recent repositories…"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                         </Border>
+
+
                         <Button Grid.Column="1"
                                 Style="{StaticResource SmallIconBtn}"
                                 Text="✎"
@@ -84,12 +85,12 @@
                                 IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                        
                     <!--TODO There is a bug here. WHen button pressed  saved repos picker disappears-->
-                        <!--<Button Grid.Column="2"
+                        <Button Grid.Column="2"
                                 Style="{StaticResource SmallIconBtn}"
                                 Text="🗑"
                                 Command="{Binding ClearSavedReposCommand}"
                                 ToolTipProperties.Text="Clear all saved repositories"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />-->
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                     </Grid>
 
                     <!-- Branch — single button fetches + opens action sheet -->
