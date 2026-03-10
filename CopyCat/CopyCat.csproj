@@ -38,13 +38,12 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm"                   Version="8.4.0" />
-    <!-- FIX: Nedgraderad från 10.0.3 till 9.0.0 för att matcha resten av projektet.
-         10.x tillhör .NET 10-ekosystemet och kan orsaka subtila körtidsfel
-         och byggarningar när övriga paket är på .NET 9. -->
     <PackageReference Include="Microsoft.Extensions.Http"               Version="9.0.0" />
     <PackageReference Include="Microsoft.Maui.Controls"                 Version="9.0.0" />
     <PackageReference Include="Microsoft.Maui.Controls.Compatibility"   Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug"      Version="9.0.0" />
+    <PackageReference Include="sqlite-net-pcl"                          Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green"               Version="2.1.8" />
   </ItemGroup>
 
 </Project>
