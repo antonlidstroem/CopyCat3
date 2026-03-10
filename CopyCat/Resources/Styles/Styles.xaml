@@ -5,7 +5,7 @@
                     x:Class="CopyCat.Resources.Styles.Styles">
 
     <!-- ══════════════════════════════════════════════════════════
-         COLORS — defined first so every StaticResource below resolves.
+         COLORS
          ══════════════════════════════════════════════════════════ -->
 
     <Color x:Key="BgApp">#111118</Color>
@@ -18,6 +18,8 @@
     <Color x:Key="BgChipOff">#13131F</Color>
     <Color x:Key="BgChunkDefault">#1A1A2E</Color>
     <Color x:Key="BgChunkCopied">#1A2E20</Color>
+    <Color x:Key="BgChunkSelected">#17213A</Color>
+    <Color x:Key="BgPreview">#0D0D18</Color>
 
     <Color x:Key="AccentPrimary">#5B8EFF</Color>
     <Color x:Key="AccentPrimaryLight">#7BACFF</Color>
@@ -27,6 +29,9 @@
     <Color x:Key="AccentGreenBg">#3322C55E</Color>
     <Color x:Key="AccentGreenBorder">#3322C55E</Color>
 
+    <Color x:Key="BgSelectionToolbar">#1A2240</Color>
+    <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
+
     <Color x:Key="TextPrimary">#E0E0FF</Color>
     <Color x:Key="TextSecondary">#A0A0C0</Color>
     <Color x:Key="TextMuted">#666690</Color>
@@ -35,6 +40,7 @@
     <Color x:Key="TextError">#FF7070</Color>
     <Color x:Key="TextAccent">#7BACFF</Color>
     <Color x:Key="TextOnAccent">#FFFFFF</Color>
+    <Color x:Key="TextCode">#B0C4FF</Color>
 
     <Color x:Key="BorderDefault">#2D2D4A</Color>
     <Color x:Key="BorderInput">#3D3D60</Color>
@@ -42,8 +48,10 @@
     <Color x:Key="BorderError">#C03030</Color>
     <Color x:Key="BorderChipOn">#22C55E</Color>
     <Color x:Key="BorderChipOff">#2D2D4A</Color>
-    <Color x:Key="BorderChunkDefault">#5B8EFF</Color>
+    <Color x:Key="BorderChunkDefault">#2D2D4A</Color>
     <Color x:Key="BorderChunkCopied">#22C55E</Color>
+    <Color x:Key="BorderChunkSelected">#5B8EFF</Color>
+    <Color x:Key="BorderPreview">#1E1E35</Color>
 
     <Color x:Key="SliderTrackActive">#5B8EFF</Color>
     <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
@@ -51,11 +59,9 @@
     <Color x:Key="ActivityIndicatorColor">#5B8EFF</Color>
 
     <!-- ══════════════════════════════════════════════════════════
-         CONVERTERS — defined after colors so StaticResource resolves.
-         Placed here so MainPage.xaml needs no ContentPage.Resources block.
+         CONVERTERS
          ══════════════════════════════════════════════════════════ -->
 
-    <!-- Chip (file type / folder toggle) -->
     <conv:BoolToColorConverter x:Key="ChipBorderConv"
                                TrueColor="{StaticResource BorderChipOn}"
                                FalseColor="{StaticResource BorderChipOff}" />
@@ -63,19 +69,16 @@
                                TrueColor="{StaticResource BgChipOn}"
                                FalseColor="{StaticResource BgChipOff}" />
 
-    <!-- Chunk button -->
-    <conv:BoolToColorConverter x:Key="ChunkBorderConv"
-                               TrueColor="{StaticResource BorderChunkCopied}"
-                               FalseColor="{StaticResource BorderChunkDefault}" />
-    <conv:BoolToColorConverter x:Key="ChunkBgConv"
-                               TrueColor="{StaticResource BgChunkCopied}"
-                               FalseColor="{StaticResource BgChunkDefault}" />
+    <conv:InverseBoolConverter        x:Key="InverseBool" />
+    <conv:IntGreaterThanZeroConverter  x:Key="IntGtZero" />
+    <conv:BoolToStringConverter        x:Key="ExpandArrowConv"
+                                       TrueValue="▲"
+                                       FalseValue="▼" />
 
-    <conv:InverseBoolConverter       x:Key="InverseBool" />
-    <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
-    <conv:BoolToStringConverter      x:Key="ExpandArrowConv"
-                                     TrueValue="▲"
-                                     FalseValue="▼" />
+    <!-- Instruktionstext bredvid CHUNKS-rubriken -->
+    <conv:BoolToStringConverter        x:Key="SelectionHintConv"
+                                       TrueValue=""
+                                       FalseValue="kryssa för att markera" />
 
     <!-- ══════════════════════════════════════════════════════════
          GLOBAL ELEMENT DEFAULTS
@@ -102,6 +105,14 @@
 
     <Style TargetType="CheckBox">
         <Setter Property="Color" Value="{StaticResource AccentPrimary}" />
+    </Style>
+
+    <Style TargetType="Picker">
+        <Setter Property="TextColor"        Value="{StaticResource TextPrimary}" />
+        <Setter Property="TitleColor"       Value="{StaticResource TextMuted}" />
+        <Setter Property="BackgroundColor"  Value="Transparent" />
+        <Setter Property="FontFamily"       Value="OpenSansRegular" />
+        <Setter Property="FontSize"         Value="14" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -136,6 +147,16 @@
         <Setter Property="BackgroundColor"  Value="Transparent" />
     </Style>
 
+    <!-- Picker inuti en InputBorder -->
+    <Style x:Key="InputPicker" TargetType="Picker">
+        <Setter Property="TextColor"       Value="{StaticResource TextPrimary}" />
+        <Setter Property="TitleColor"      Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"        Value="14" />
+        <Setter Property="HeightRequest"   Value="50" />
+        <Setter Property="Margin"          Value="12,0" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+    </Style>
+
     <!-- ══════════════════════════════════════════════════════════
          TYPOGRAPHY
          ══════════════════════════════════════════════════════════ -->
@@ -163,6 +184,27 @@
     <Style x:Key="HeaderSubtitle" TargetType="Label">
         <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="12" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SLIDER WARNING
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="SliderWarningLabel" TargetType="Label">
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+        <Setter Property="Margin"        Value="0,6,0,0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         RECENT URLS DROPDOWN BADGE
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="RecentUrlsPickerBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgInput}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderInput}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="0" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -200,6 +242,69 @@
         <Setter Property="MinimumWidthRequest"  Value="44" />
     </Style>
 
+    <!-- Dela + förhandsvisnings-knappar inuti varje chunk-kort -->
+    <Style x:Key="ChunkActionBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="Transparent" />
+        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="15" />
+        <Setter Property="Padding"              Value="8,4" />
+        <Setter Property="MinimumHeightRequest" Value="40" />
+        <Setter Property="MinimumWidthRequest"  Value="38" />
+    </Style>
+
+    <!-- Dela-knappen i multi-select toolbar -->
+    <Style x:Key="ShareBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextOnAccent}" />
+        <Setter Property="FontSize"             Value="14" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="42" />
+        <Setter Property="Padding"              Value="16,0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         MULTI-SELECT TOOLBAR
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="SelectionToolbarBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSelectionToolbar}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderSelectionToolbar}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="Padding"         Value="14,10" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="SelectionCountLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource AccentPrimaryLight}" />
+        <Setter Property="FontSize"       Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <Style x:Key="SelectionTokensLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"  Value="11" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         FÖRHANDSVISNING (expanderbar)
+         ══════════════════════════════════════════════════════════ -->
+    <Style x:Key="PreviewBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgPreview}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,14,14" />
+        <Setter Property="Padding"         Value="14,10,14,14" />
+    </Style>
+
+    <Style x:Key="PreviewLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextCode}" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="FontFamily"    Value="OpenSansRegular" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
     <!-- ══════════════════════════════════════════════════════════
          CHIPS
          ══════════════════════════════════════════════════════════ -->
@@ -218,26 +323,7 @@
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
-         RECENT URLS
-         ══════════════════════════════════════════════════════════ -->
-    <Style x:Key="RecentUrlBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource BgInput}" />
-        <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Stroke"          Value="{StaticResource BorderInput}" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
-        <Setter Property="Padding"         Value="10,6" />
-        <Setter Property="Margin"          Value="0,0,6,0" />
-    </Style>
-
-    <Style x:Key="RecentUrlLabel" TargetType="Label">
-        <Setter Property="TextColor"     Value="{StaticResource TextAccent}" />
-        <Setter Property="FontSize"      Value="12" />
-        <Setter Property="LineBreakMode" Value="TailTruncation" />
-        <Setter Property="MaxLines"      Value="1" />
-    </Style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         CHUNK BUTTONS
+         CHUNK CARDS
          ══════════════════════════════════════════════════════════ -->
     <Style x:Key="ChunkBorder" TargetType="Border">
         <Setter Property="StrokeThickness" Value="1.5" />
@@ -258,13 +344,6 @@
         <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="12" />
         <Setter Property="Margin"    Value="0,2,0,0" />
-    </Style>
-
-    <Style x:Key="ChunkCheckLabel" TargetType="Label">
-        <Setter Property="TextColor"       Value="{StaticResource AccentGreen}" />
-        <Setter Property="FontSize"        Value="22" />
-        <Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Margin"          Value="8,0,0,0" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════

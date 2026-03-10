@@ -4,10 +4,12 @@ namespace CopyCat.Services;
 
 internal static partial class GitHubUrlParser
 {
-    // Matches github.com/owner/repo — tolerates trailing slashes, query strings,
-    // fragment identifiers, paths under the repo (e.g. /tree/main/src), and .git suffix.
+    // FIX: Repo-gruppen använde [^/?#.] vilket exkluderade punkter och bröt
+    // repos som "dotnet/dotnet.github.io" eller "user/my.app".
+    // Ändrat till [^/?#] för att tillåta punkter, men (?:\.git)? fångar
+    // fortfarande .git-suffixet korrekt eftersom regex är girigt vänster-till-höger.
     [GeneratedRegex(
-        @"github\.com/(?<owner>[^/?#]+)/(?<repo>[^/?#.]+?)(?:\.git)?(?:[/?#].*)?$",
+        @"github\.com/(?<owner>[^/?#]+)/(?<repo>[^/?#]+?)(?:\.git)?(?:[/?#]|$)",
         RegexOptions.IgnoreCase)]
     private static partial Regex RepoUrlRegex();
 
