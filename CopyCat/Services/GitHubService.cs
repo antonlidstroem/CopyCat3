@@ -1,7 +1,6 @@
-using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net.Http.Headers;
-using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace CopyCat.Services;
 
@@ -9,14 +8,54 @@ public class GitHubService : IGitHubService
 {
     private readonly IHttpClientFactory _httpFactory;
 
-    // Cache compiled glob→regex conversions so we don't recompile on every file.
-    // Key: glob pattern string. Value: compiled Regex.
-    private static readonly ConcurrentDictionary<string, Regex> GlobCache = new();
-
     public GitHubService(IHttpClientFactory httpFactory)
     {
         _httpFactory = httpFactory;
     }
+
+    // ── FetchBranchesAsync ─────────────────────────────────────────────────────
+
+    public async Task<List<string>> FetchBranchesAsync(
+        string            repoUrl,
+        string?           accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
+
+            using var http = _httpFactory.CreateClient("github");
+
+            var url     = $"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100";
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Accept.ParseAdd("application/vnd.github+json");
+
+            if (!string.IsNullOrWhiteSpace(accessToken))
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("token", accessToken);
+
+            var response = await http.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode) return [];
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(json);
+
+            var branches = doc.RootElement
+                .EnumerateArray()
+                .Select(e => e.GetProperty("name").GetString() ?? "")
+                .Where(n => !string.IsNullOrEmpty(n))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return branches;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    // ── FetchFilesAsync ────────────────────────────────────────────────────────
 
     public async Task<List<(string Path, string Content)>> FetchFilesAsync(
         string              repoUrl,
@@ -34,11 +73,10 @@ public class GitHubService : IGitHubService
             .Select(e => e.ToLowerInvariant())
             .ToHashSet();
 
-        var excludedSet = excludedFolders
+        var excludedFolderSet = excludedFolders
             .Select(f => f.ToLowerInvariant().Trim('/'))
             .ToHashSet();
 
-        // Materialise once; filter out blank/null entries defensively.
         var patternList = excludedFilePatterns
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .ToList();
@@ -55,10 +93,10 @@ public class GitHubService : IGitHubService
                   .Where(b => !b.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase)))
               .ToArray();
 
-        byte[]? zipBytes   = null;
-        string? usedBranch = null;
+        using var http = _httpFactory.CreateClient("github");
 
-        var http = _httpFactory.CreateClient("github");
+        HttpResponseMessage? successResponse = null;
+        string?              usedBranch      = null;
 
         foreach (var candidate in candidates)
         {
@@ -72,7 +110,7 @@ public class GitHubService : IGitHubService
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
                 if (useApi)
                 {
                     request.Headers.Authorization =
@@ -86,18 +124,32 @@ public class GitHubService : IGitHubService
                     cancellationToken);
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    response.Dispose();
                     continue;
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    response.Dispose();
+                    throw new InvalidOperationException(
+                        "GitHub nekade åtkomst (403 Forbidden). " +
+                        "Du kan ha nått API-gränsen för anonym användning. " +
+                        "Ange ett GitHub-token för att höja gränsen.");
+                }
 
                 if (!response.IsSuccessStatusCode)
+                {
+                    response.Dispose();
                     throw new InvalidOperationException(
                         $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'. " +
                         (useApi
                             ? "Kontrollera att token är giltig och har rätt behörighet."
                             : "Kontrollera att repot existerar och är publikt."));
+                }
 
-                progress?.Report($"Laddar ned arkiv (gren: '{candidate}')…");
-                zipBytes   = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-                usedBranch = candidate;
+                successResponse = response;
+                usedBranch      = candidate;
                 break;
             }
             catch (OperationCanceledException) { throw; }
@@ -108,7 +160,7 @@ public class GitHubService : IGitHubService
             }
         }
 
-        if (zipBytes is null)
+        if (successResponse is null)
             throw new InvalidOperationException(
                 $"Repot '{owner}/{repo}' hittades inte på någon gren " +
                 $"(provade: {string.Join(", ", candidates)}). " +
@@ -122,54 +174,62 @@ public class GitHubService : IGitHubService
             await Task.Delay(1500, cancellationToken);
         }
 
-        progress?.Report("Packar upp och filtrerar…");
+        progress?.Report("Laddar ned och packar upp…");
 
         var results = new List<(string Path, string Content)>();
 
-        using var memStream = new MemoryStream(zipBytes);
-        using var archive   = new ZipArchive(memStream, ZipArchiveMode.Read);
-
-        foreach (var entry in archive.Entries)
+        using (successResponse)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            using var responseStream = await successResponse.Content
+                .ReadAsStreamAsync(cancellationToken);
 
-            if (entry.FullName.EndsWith('/')) continue;
+            var memStream = new MemoryStream();
+            await responseStream.CopyToAsync(memStream, cancellationToken);
+            memStream.Position = 0;
 
-            var slash        = entry.FullName.IndexOf('/');
-            var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
+            using var archive = new ZipArchive(memStream, ZipArchiveMode.Read);
 
-            if (string.IsNullOrEmpty(relativePath))                       continue;
-            if (IsInExcludedFolder(relativePath, excludedSet))            continue;
-
-            var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
-            if (!extSet.Contains(ext))                                    continue;
-
-            // Skip files whose name matches any enabled glob pattern.
-            if (patternList.Count > 0 &&
-                patternList.Any(p => MatchesGlob(entry.Name, p)))         continue;
-
-            try
+            foreach (var entry in archive.Entries)
             {
-                using var stream = entry.Open();
-                using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
-                results.Add((relativePath, await reader.ReadToEndAsync(cancellationToken)));
-            }
-            catch
-            {
-                results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (entry.FullName.EndsWith('/')) continue;
+
+                var slash        = entry.FullName.IndexOf('/');
+                var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
+
+                if (string.IsNullOrEmpty(relativePath))                             continue;
+                if (IsInExcludedFolder(relativePath, excludedFolderSet))            continue;
+
+                var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
+                if (!extSet.Contains(ext))                                          continue;
+
+                // Filtrera bort filer som matchar uteslutna mönster
+                if (patternList.Count > 0 && MatchesAnyPattern(entry.Name, patternList)) continue;
+
+                try
+                {
+                    using var stream = entry.Open();
+                    using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+                    results.Add((relativePath, await reader.ReadToEndAsync(cancellationToken)));
+                }
+                catch
+                {
+                    results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
+                }
             }
         }
 
         if (results.Count == 0)
             throw new InvalidOperationException(
                 "Inga filer hittades med de valda filtyperna. " +
-                "Kontrollera att du valt rätt filtyper och att filtren inte blockerar allt.");
+                "Kontrollera att du valt rätt filtyper och att mappfiltren inte blockerar allt.");
 
         progress?.Report($"Klart! {results.Count} filer från '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {
@@ -183,24 +243,47 @@ public class GitHubService : IGitHubService
     }
 
     /// <summary>
-    /// Matches a file name against a glob pattern supporting * (any chars) and
-    /// ? (single char), case-insensitive.
-    ///
-    /// Compiled Regex instances are cached in GlobCache so each unique pattern
-    /// is only compiled once across the entire fetch operation.
+    /// Returnerar true om filnamnet matchar något av de angivna glob-mönstren.
+    /// Stöder enkelt jokertecken: * matchar noll eller fler tecken (skiftlägesokänsligt).
+    /// Exempel: "*Test*", "*.generated.*", "*_test.*"
     /// </summary>
-    private static bool MatchesGlob(string fileName, string pattern)
+    private static bool MatchesAnyPattern(string fileName, List<string> patterns)
     {
-        var regex = GlobCache.GetOrAdd(pattern, p =>
-        {
-            var regexStr = "^" +
-                Regex.Escape(p)
-                     .Replace("\\*", ".*")
-                     .Replace("\\?", ".") +
-                "$";
-            return new Regex(regexStr, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        });
+        foreach (var pattern in patterns)
+            if (MatchesGlob(fileName, pattern))
+                return true;
+        return false;
+    }
 
-        return regex.IsMatch(fileName);
+    private static bool MatchesGlob(string text, string pattern)
+    {
+        var t = text.ToLowerInvariant();
+        var p = pattern.ToLowerInvariant();
+
+        // Dela upp på * och matcha del för del
+        var parts = p.Split('*');
+
+        if (parts.Length == 1)
+            return t.Equals(p, StringComparison.Ordinal);
+
+        int pos = 0;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length == 0) continue;
+
+            int found = t.IndexOf(parts[i], pos, StringComparison.Ordinal);
+            if (found < 0) return false;
+
+            // Första segmentet (utan ledande *) måste börja från position 0
+            if (i == 0 && !p.StartsWith('*') && found != 0) return false;
+
+            pos = found + parts[i].Length;
+        }
+
+        // Sista segmentet (utan avslutande *) måste vara ett suffix
+        if (!p.EndsWith('*') && parts[^1].Length > 0 && !t.EndsWith(parts[^1]))
+            return false;
+
+        return true;
     }
 }

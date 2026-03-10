@@ -18,8 +18,6 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // Named HttpClient — single shared instance with centralised config.
-        // GitHubService resolves this via IHttpClientFactory.
         builder.Services.AddHttpClient("github", client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5);
@@ -35,9 +33,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IGitHubService,    GitHubService>();
         builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
         builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
+        builder.Services.AddSingleton<IShareService,     MauiShareService>();
 
-        // UI — Singleton avoids captive-dependency issues in a single-page app.
-        // App itself is managed by UseMauiApp<App>() — do NOT add it here again.
+        // UI
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainPage>();
 
