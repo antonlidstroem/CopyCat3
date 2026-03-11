@@ -34,6 +34,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
         builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
         builder.Services.AddSingleton<IShareService,     MauiShareService>();
+        builder.Services.AddSingleton<IDatabaseService,  DatabaseService>();
+        builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
 
         // UI
         builder.Services.AddSingleton<MainViewModel>();

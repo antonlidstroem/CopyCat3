@@ -12,10 +12,6 @@ public interface IGitHubService
         IProgress<string>?  progress          = null,
         CancellationToken   cancellationToken = default);
 
-    /// <summary>
-    /// Hämtar grenar för ett GitHub-repo.
-    /// Returnerar en tom lista vid fel (dålig URL, rate-limit, etc.).
-    /// </summary>
     Task<List<string>> FetchBranchesAsync(
         string            repoUrl,
         string?           accessToken,

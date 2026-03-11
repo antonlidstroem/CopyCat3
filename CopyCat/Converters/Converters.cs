@@ -28,10 +28,7 @@ public class InverseBoolConverter : IValueConverter
         value is bool b && !b;
 }
 
-/// <summary>
-/// Returns true when the integer value is greater than zero.
-/// Use for IsVisible bindings on collections.
-/// </summary>
+/// <summary>Returns true when the integer value is greater than zero.</summary>
 public class IntGreaterThanZeroConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -41,9 +38,7 @@ public class IntGreaterThanZeroConverter : IValueConverter
         throw new NotImplementedException();
 }
 
-/// <summary>
-/// Converts a bool to one of two string values (e.g. toggle arrow glyphs).
-/// </summary>
+/// <summary>Converts a bool to one of two string values (e.g. toggle arrow glyphs).</summary>
 public class BoolToStringConverter : IValueConverter
 {
     public string TrueValue  { get; set; } = string.Empty;

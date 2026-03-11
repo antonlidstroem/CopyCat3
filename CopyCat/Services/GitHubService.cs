@@ -13,7 +13,7 @@ public class GitHubService : IGitHubService
         _httpFactory = httpFactory;
     }
 
-    // ── FetchBranchesAsync ─────────────────────────────────────────────────────
+    // ── Branch listing ─────────────────────────────────────────────────────
 
     public async Task<List<string>> FetchBranchesAsync(
         string            repoUrl,
@@ -23,8 +23,7 @@ public class GitHubService : IGitHubService
         try
         {
             var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
-
-            using var http = _httpFactory.CreateClient("github");
+            using var http    = _httpFactory.CreateClient("github");
 
             var url     = $"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -40,22 +39,22 @@ public class GitHubService : IGitHubService
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             using var doc = JsonDocument.Parse(json);
 
-            var branches = doc.RootElement
+            return doc.RootElement
                 .EnumerateArray()
                 .Select(e => e.GetProperty("name").GetString() ?? "")
                 .Where(n => !string.IsNullOrEmpty(n))
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-
-            return branches;
         }
-        catch
-        {
-            return [];
-        }
+        // BUG FIX #12: the old catch-all swallowed OperationCanceledException,
+        // so pressing Abort during branch loading had no effect — the spinner
+        // kept running and an empty list was silently returned.
+        // Re-throw cancellation before the generic handler.
+        catch (OperationCanceledException) { throw; }
+        catch { return []; }
     }
 
-    // ── FetchFilesAsync ────────────────────────────────────────────────────────
+    // ── File fetch ─────────────────────────────────────────────────────────
 
     public async Task<List<(string Path, string Content)>> FetchFilesAsync(
         string              repoUrl,
@@ -69,21 +68,12 @@ public class GitHubService : IGitHubService
     {
         var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
 
-        var extSet = extensions
-            .Select(e => e.ToLowerInvariant())
-            .ToHashSet();
+        var extSet            = extensions.Select(e => e.ToLowerInvariant()).ToHashSet();
+        var excludedFolderSet = excludedFolders.Select(f => f.ToLowerInvariant().Trim('/')).ToHashSet();
+        var patternList       = excludedFilePatterns.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        bool useApi           = !string.IsNullOrWhiteSpace(accessToken);
 
-        var excludedFolderSet = excludedFolders
-            .Select(f => f.ToLowerInvariant().Trim('/'))
-            .ToHashSet();
-
-        var patternList = excludedFilePatterns
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .ToList();
-
-        bool useApi = !string.IsNullOrWhiteSpace(accessToken);
-
-        progress?.Report($"Ansluter till {owner}/{repo}…");
+        progress?.Report($"Connecting to {owner}/{repo}…");
 
         var trimmedBranch = branch.Trim();
         var candidates = string.IsNullOrWhiteSpace(trimmedBranch)
@@ -106,7 +96,7 @@ public class GitHubService : IGitHubService
                 ? $"https://api.github.com/repos/{owner}/{repo}/zipball/{candidate}"
                 : $"https://github.com/{owner}/{repo}/archive/refs/heads/{candidate}.zip";
 
-            progress?.Report($"Provar gren '{candidate}'…");
+            progress?.Report($"Trying branch '{candidate}'…");
 
             try
             {
@@ -119,33 +109,26 @@ public class GitHubService : IGitHubService
                 }
 
                 var response = await http.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken);
+                    request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    response.Dispose();
-                    continue;
+                    response.Dispose(); continue;
                 }
-
                 if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
                     response.Dispose();
                     throw new InvalidOperationException(
-                        "GitHub nekade åtkomst (403 Forbidden). " +
-                        "Du kan ha nått API-gränsen för anonym användning. " +
-                        "Ange ett GitHub-token för att höja gränsen.");
+                        "GitHub denied access (403 Forbidden). You may have hit the anonymous rate limit. " +
+                        "Enter a GitHub token to increase the limit.");
                 }
-
                 if (!response.IsSuccessStatusCode)
                 {
                     response.Dispose();
                     throw new InvalidOperationException(
-                        $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'. " +
-                        (useApi
-                            ? "Kontrollera att token är giltig och har rätt behörighet."
-                            : "Kontrollera att repot existerar och är publikt."));
+                        $"GitHub responded {(int)response.StatusCode} for '{owner}/{repo}'. " +
+                        (useApi ? "Check that the token is valid and has the correct permissions."
+                                : "Check that the repository exists and is public."));
                 }
 
                 successResponse = response;
@@ -156,33 +139,29 @@ public class GitHubService : IGitHubService
             catch (InvalidOperationException)  { throw; }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Nätverksfel: {ex.Message}", ex);
+                throw new InvalidOperationException($"Network error: {ex.Message}", ex);
             }
         }
 
         if (successResponse is null)
             throw new InvalidOperationException(
-                $"Repot '{owner}/{repo}' hittades inte på någon gren " +
-                $"(provade: {string.Join(", ", candidates)}). " +
-                "Kontrollera URL och grennamn.");
+                $"Repository '{owner}/{repo}' was not found on any branch " +
+                $"(tried: {string.Join(", ", candidates)}). Check the URL and branch name.");
 
         if (!string.IsNullOrWhiteSpace(trimmedBranch) &&
             !usedBranch!.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase))
         {
-            progress?.Report(
-                $"⚠️ Gren '{trimmedBranch}' hittades inte — använde '{usedBranch}' istället.");
+            progress?.Report($"⚠️ Branch '{trimmedBranch}' not found — using '{usedBranch}' instead.");
             await Task.Delay(1500, cancellationToken);
         }
 
-        progress?.Report("Laddar ned och packar upp…");
+        progress?.Report("Downloading and extracting…");
 
         var results = new List<(string Path, string Content)>();
 
         using (successResponse)
         {
-            using var responseStream = await successResponse.Content
-                .ReadAsStreamAsync(cancellationToken);
-
+            using var responseStream = await successResponse.Content.ReadAsStreamAsync(cancellationToken);
             var memStream = new MemoryStream();
             await responseStream.CopyToAsync(memStream, cancellationToken);
             memStream.Position = 0;
@@ -192,19 +171,17 @@ public class GitHubService : IGitHubService
             foreach (var entry in archive.Entries)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 if (entry.FullName.EndsWith('/')) continue;
 
                 var slash        = entry.FullName.IndexOf('/');
                 var relativePath = slash >= 0 ? entry.FullName[(slash + 1)..] : entry.FullName;
 
-                if (string.IsNullOrEmpty(relativePath))                             continue;
-                if (IsInExcludedFolder(relativePath, excludedFolderSet))            continue;
+                if (string.IsNullOrEmpty(relativePath))                  continue;
+                if (IsInExcludedFolder(relativePath, excludedFolderSet)) continue;
 
-                var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
-                if (!extSet.Contains(ext))                                          continue;
+                var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
+                if (!extSet.Contains(ext))                               continue;
 
-                // Filtrera bort filer som matchar uteslutna mönster
                 if (patternList.Count > 0 && MatchesAnyPattern(entry.Name, patternList)) continue;
 
                 try
@@ -215,75 +192,55 @@ public class GitHubService : IGitHubService
                 }
                 catch
                 {
-                    results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
+                    results.Add((relativePath, $"// [Could not read: {relativePath}]"));
                 }
             }
         }
 
         if (results.Count == 0)
             throw new InvalidOperationException(
-                "Inga filer hittades med de valda filtyperna. " +
-                "Kontrollera att du valt rätt filtyper och att mappfiltren inte blockerar allt.");
+                "No files found with the selected file types. " +
+                "Check that the correct file types are enabled and that folder filters are not blocking everything.");
 
-        progress?.Report($"Klart! {results.Count} filer från '{usedBranch}'.");
+        progress?.Report($"Done! {results.Count} files from '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {
         var parts = relativePath.Replace('\\', '/').Split('/');
         for (int i = 0; i < parts.Length - 1; i++)
-        {
             if (excluded.Contains(parts[i].ToLowerInvariant()))
                 return true;
-        }
         return false;
     }
 
-    /// <summary>
-    /// Returnerar true om filnamnet matchar något av de angivna glob-mönstren.
-    /// Stöder enkelt jokertecken: * matchar noll eller fler tecken (skiftlägesokänsligt).
-    /// Exempel: "*Test*", "*.generated.*", "*_test.*"
-    /// </summary>
     private static bool MatchesAnyPattern(string fileName, List<string> patterns)
     {
-        foreach (var pattern in patterns)
-            if (MatchesGlob(fileName, pattern))
+        foreach (var p in patterns)
+            if (MatchesGlob(fileName, p))
                 return true;
         return false;
     }
 
     private static bool MatchesGlob(string text, string pattern)
     {
-        var t = text.ToLowerInvariant();
-        var p = pattern.ToLowerInvariant();
-
-        // Dela upp på * och matcha del för del
+        var t     = text.ToLowerInvariant();
+        var p     = pattern.ToLowerInvariant();
         var parts = p.Split('*');
-
-        if (parts.Length == 1)
-            return t.Equals(p, StringComparison.Ordinal);
-
+        if (parts.Length == 1) return t.Equals(p, StringComparison.Ordinal);
         int pos = 0;
         for (int i = 0; i < parts.Length; i++)
         {
             if (parts[i].Length == 0) continue;
-
             int found = t.IndexOf(parts[i], pos, StringComparison.Ordinal);
             if (found < 0) return false;
-
-            // Första segmentet (utan ledande *) måste börja från position 0
             if (i == 0 && !p.StartsWith('*') && found != 0) return false;
-
             pos = found + parts[i].Length;
         }
-
-        // Sista segmentet (utan avslutande *) måste vara ett suffix
-        if (!p.EndsWith('*') && parts[^1].Length > 0 && !t.EndsWith(parts[^1]))
-            return false;
-
+        if (!p.EndsWith('*') && parts[^1].Length > 0 && !t.EndsWith(parts[^1])) return false;
         return true;
     }
 }
