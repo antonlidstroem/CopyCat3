@@ -50,16 +50,30 @@ public partial class MainPage : ContentPage
             if (name is not null)
                 await _viewModel.SetRepoNameAsync(repo, name);
         };
+
+        // History popup — shows the saved-repos list as an action sheet
+        // so the clock icon in the URL field provides a quick-pick overlay.
+        _viewModel.ShowHistoryRequested += async (_, repos) =>
+        {
+            if (repos.Count == 0)
+            {
+                await DisplayAlert("History", "No recent repositories saved yet.", "OK");
+                return;
+            }
+
+            var labels = repos.Select(r => r.DisplayName).ToArray();
+            var picked = await DisplayActionSheet("Recent repositories", "Cancel", null, labels);
+
+            if (picked is null or "Cancel") return;
+
+            var chosen = repos.FirstOrDefault(r => r.DisplayName == picked);
+            if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
+        };
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-
-        // BUG FIX #14: async void OnAppearing was unguarded — any exception
-        // thrown by InitializeAsync() would be unhandled and silently crash
-        // the app on some MAUI versions.  Wrap in try/catch and surface the
-        // error through StatusText so the user has actionable feedback.
         try
         {
             await _viewModel.InitializeAsync();

@@ -5,23 +5,37 @@
                     x:Class="CopyCat.Resources.Styles.Styles">
 
     <!-- ══════════════════════════════════════════════════════════════════════
-         COLORS
+         COLORS — Design System
          ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- App surfaces -->
     <Color x:Key="BgApp">#111118</Color>
     <Color x:Key="BgCard">#1C1C28</Color>
     <Color x:Key="BgInput">#0D0D16</Color>
     <Color x:Key="BgStatus">#14141F</Color>
     <Color x:Key="BgSuccess">#0A1A12</Color>
     <Color x:Key="BgError">#200A0A</Color>
-    <Color x:Key="BgChipOn">#1A2E1A</Color>
-    <Color x:Key="BgChipOff">#13131F</Color>
-    <Color x:Key="BgChunkDefault">#1A1A2E</Color>
-    <Color x:Key="BgChunkCopied">#1A2E20</Color>
-    <Color x:Key="BgChunkSelected">#17213A</Color>
     <Color x:Key="BgPreview">#0D0D18</Color>
     <Color x:Key="BgPromptCard">#181826</Color>
     <Color x:Key="BgPromptEdit">#0F0F1E</Color>
+    <Color x:Key="BgSmartBar">#16161F</Color>
 
+    <!-- Chip states -->
+    <Color x:Key="BgChipOn">#1A2E1A</Color>
+    <Color x:Key="BgChipOff">#13131F</Color>
+    <Color x:Key="BgChipOnFolder">#1A1A2E</Color>
+    <Color x:Key="BgChipOnPattern">#2E1A1A</Color>
+
+    <!-- Chunk card states -->
+    <Color x:Key="BgChunkDefault">#1A1A2E</Color>
+    <Color x:Key="BgChunkCopied">#1A2E20</Color>
+    <Color x:Key="BgChunkSelected">#17213A</Color>
+
+    <!-- Selection toolbar -->
+    <Color x:Key="BgSelectionToolbar">#1A2240</Color>
+    <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
+
+    <!-- Accents -->
     <Color x:Key="AccentPrimary">#5B8EFF</Color>
     <Color x:Key="AccentPrimaryLight">#7BACFF</Color>
     <Color x:Key="AccentPrimaryBg">#1A5B8EFF</Color>
@@ -31,9 +45,7 @@
     <Color x:Key="AccentGreenBorder">#3322C55E</Color>
     <Color x:Key="AccentRed">#FF7070</Color>
 
-    <Color x:Key="BgSelectionToolbar">#1A2240</Color>
-    <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
-
+    <!-- Text -->
     <Color x:Key="TextPrimary">#E0E0FF</Color>
     <Color x:Key="TextSecondary">#A0A0C0</Color>
     <Color x:Key="TextMuted">#666690</Color>
@@ -43,19 +55,24 @@
     <Color x:Key="TextAccent">#7BACFF</Color>
     <Color x:Key="TextOnAccent">#FFFFFF</Color>
     <Color x:Key="TextCode">#B0C4FF</Color>
+    <Color x:Key="TextCopied">#22C55E</Color>
 
+    <!-- Borders -->
     <Color x:Key="BorderDefault">#2D2D4A</Color>
     <Color x:Key="BorderInput">#3D3D60</Color>
     <Color x:Key="BorderSuccess">#3322C55E</Color>
     <Color x:Key="BorderError">#C03030</Color>
     <Color x:Key="BorderChipOn">#22C55E</Color>
     <Color x:Key="BorderChipOff">#2D2D4A</Color>
+    <Color x:Key="BorderChipOnFolder">#5B8EFF</Color>
+    <Color x:Key="BorderChipOnPattern">#FF7070</Color>
     <Color x:Key="BorderChunkDefault">#2D2D4A</Color>
     <Color x:Key="BorderChunkCopied">#22C55E</Color>
     <Color x:Key="BorderChunkSelected">#5B8EFF</Color>
     <Color x:Key="BorderPreview">#1E1E35</Color>
     <Color x:Key="BorderPrompt">#252540</Color>
 
+    <!-- Slider -->
     <Color x:Key="SliderTrackActive">#5B8EFF</Color>
     <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
     <Color x:Key="SliderThumb">#7BACFF</Color>
@@ -64,12 +81,52 @@
     <!-- ══════════════════════════════════════════════════════════════════════
          CONVERTERS
          ══════════════════════════════════════════════════════════════════════ -->
+    <!-- File-type chip (green when on) -->
     <conv:BoolToColorConverter x:Key="ChipBorderConv"
                                TrueColor="{StaticResource BorderChipOn}"
                                FalseColor="{StaticResource BorderChipOff}" />
     <conv:BoolToColorConverter x:Key="ChipBgConv"
                                TrueColor="{StaticResource BgChipOn}"
                                FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Folder chip (blue when excluded) -->
+    <conv:BoolToColorConverter x:Key="FolderChipBorderConv"
+                               TrueColor="{StaticResource BorderChipOnFolder}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="FolderChipBgConv"
+                               TrueColor="{StaticResource BgChipOnFolder}"
+                               FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Pattern chip (red when on) -->
+    <conv:BoolToColorConverter x:Key="PatternChipBorderConv"
+                               TrueColor="{StaticResource BorderChipOnPattern}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="PatternChipBgConv"
+                               TrueColor="{StaticResource BgChipOnPattern}"
+                               FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Chip label color -->
+    <conv:BoolToColorConverter x:Key="ChipLabelColorConv"
+                               TrueColor="{StaticResource TextPrimary}"
+                               FalseColor="{StaticResource TextMuted}" />
+
+    <!-- Selection indicator -->
+    <conv:BoolToColorConverter x:Key="SelectionDotBgConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="Transparent" />
+    <conv:BoolToColorConverter x:Key="SelectionDotBorderConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="{StaticResource BorderDefault}" />
+
+    <!-- Share-select indicator -->
+    <conv:BoolToColorConverter x:Key="ShareSelectDotBgConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="Transparent" />
+    <conv:BoolToColorConverter x:Key="ShareSelectDotBorderConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="{StaticResource BorderDefault}" />
+
+    <!-- General utils -->
     <conv:InverseBoolConverter        x:Key="InverseBool" />
     <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
     <conv:BoolToStringConverter x:Key="ExpandArrowConv"   TrueValue="▲" FalseValue="▼" />
@@ -100,9 +157,6 @@
     <Style TargetType="Button">
         <Setter Property="FontFamily" Value="OpenSansSemibold" />
     </Style>
-    <Style TargetType="CheckBox">
-        <Setter Property="Color" Value="{StaticResource AccentPrimary}" />
-    </Style>
 
     <!-- ══════════════════════════════════════════════════════════════════════
          CARDS
@@ -113,6 +167,16 @@
         <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
         <Setter Property="StrokeShape"     Value="RoundRectangle 14" />
         <Setter Property="Padding"         Value="14" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <!-- Compact results-mode header card -->
+    <Style x:Key="CompactHeaderCard" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgCard}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 14" />
+        <Setter Property="Padding"         Value="14,10" />
         <Setter Property="Margin"          Value="0,0,0,10" />
     </Style>
 
@@ -145,16 +209,6 @@
         <Setter Property="MinimumHeightRequest" Value="120" />
     </Style>
 
-    <!--
-        BUG FIX #5: BranchBtn (a Button) is removed entirely.  The branch
-        picker is now a tappable Grid + Label (BranchPickerLabel) + chevron
-        Label inside InputBorder — identical in appearance to every other
-        field but with full left-alignment guaranteed.
-
-        Background: Button.ContentLayout only repositions an *image* relative
-        to text; for a text-only button it has no effect, so text stayed
-        centred regardless of the "Left,8" value we set.
-    -->
     <Style x:Key="BranchPickerLabel" TargetType="Label">
         <Setter Property="TextColor"     Value="{StaticResource TextPrimary}" />
         <Setter Property="FontSize"      Value="14" />
@@ -192,6 +246,14 @@
         <Setter Property="FontSize"  Value="12" />
     </Style>
 
+    <!-- Compact results-mode summary text -->
+    <Style x:Key="CompactSummaryLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"       Value="13" />
+        <Setter Property="LineBreakMode"  Value="TailTruncation" />
+        <Setter Property="MaxLines"       Value="1" />
+    </Style>
+
     <Style x:Key="HintLabel" TargetType="Label">
         <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"      Value="11" />
@@ -203,6 +265,14 @@
         <Setter Property="FontSize"      Value="12" />
         <Setter Property="LineBreakMode" Value="WordWrap" />
         <Setter Property="Margin"        Value="0,0,0,10" />
+    </Style>
+
+    <!-- Monospace for code preview — uses a system monospace fallback -->
+    <Style x:Key="MonospaceLabel" TargetType="Label">
+        <Setter Property="FontFamily"    Value="Courier New, Courier, monospace" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="TextColor"     Value="{StaticResource TextCode}" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════════════════
@@ -281,6 +351,31 @@
         <Setter Property="Padding"              Value="16,0" />
     </Style>
 
+    <Style x:Key="CopySelectedBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentGreenBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentGreen}" />
+        <Setter Property="FontSize"             Value="14" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="42" />
+        <Setter Property="Padding"              Value="16,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentGreenBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="BackBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource BgCard}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"             Value="14" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="46" />
+        <Setter Property="Padding"              Value="16,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
     <Style x:Key="PromptSaveBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource AccentGreenBg}" />
         <Setter Property="TextColor"            Value="{StaticResource AccentGreen}" />
@@ -302,9 +397,59 @@
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════════════════
+         SMART ACTION BAR (fixed bottom)
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SmartActionBarBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSmartBar}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0" />
+        <Setter Property="Padding"         Value="14,10,14,14" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CHIPS — No CheckBox. Whole chip is tappable.
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="ChipBorder" TargetType="Border">
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
+        <Setter Property="Padding"         Value="12,8" />
+        <Setter Property="Margin"          Value="0,0,6,6" />
+    </Style>
+
+    <!-- Label inside chips — styled based on IsEnabled/IsExcluded via binding -->
+    <Style x:Key="ChipLabel" TargetType="Label">
+        <Setter Property="FontSize"        Value="13" />
+        <Setter Property="FontAttributes"  Value="Bold" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CUSTOM SELECTION INDICATOR (replaces CheckBox)
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SelectionDot" TargetType="Border">
+        <Setter Property="WidthRequest"    Value="22" />
+        <Setter Property="HeightRequest"   Value="22" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 11" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Margin"          Value="0,0,6,0" />
+        <Setter Property="Padding"         Value="0" />
+    </Style>
+
+    <Style x:Key="SelectionDotCheck" TargetType="Label">
+        <Setter Property="Text"                    Value="✓" />
+        <Setter Property="TextColor"               Value="{StaticResource TextOnAccent}" />
+        <Setter Property="FontSize"                Value="11" />
+        <Setter Property="FontAttributes"          Value="Bold" />
+        <Setter Property="HorizontalOptions"       Value="Center" />
+        <Setter Property="VerticalOptions"         Value="Center" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="VerticalTextAlignment"   Value="Center" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
          SAVED REPOS LIST
-         BUG FIX #3 + #10: Border is now a plain container — MaximumHeightRequest
-         lives on the CollectionView inside it, which owns its own scroll.
          ══════════════════════════════════════════════════════════════════════ -->
     <Style x:Key="SavedReposListBorder" TargetType="Border">
         <Setter Property="BackgroundColor" Value="{StaticResource BgInput}" />
@@ -355,27 +500,12 @@
         <Setter Property="Padding"         Value="14,10,14,14" />
     </Style>
 
+    <!-- Monospace preview label -->
     <Style x:Key="PreviewLabel" TargetType="Label">
         <Setter Property="TextColor"     Value="{StaticResource TextCode}" />
         <Setter Property="FontSize"      Value="11" />
         <Setter Property="LineBreakMode" Value="WordWrap" />
-    </Style>
-
-    <!-- ══════════════════════════════════════════════════════════════════════
-         CHIPS
-         ══════════════════════════════════════════════════════════════════════ -->
-    <Style x:Key="ChipBorder" TargetType="Border">
-        <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
-        <Setter Property="Padding"         Value="10,8" />
-        <Setter Property="Margin"          Value="0,0,6,6" />
-    </Style>
-
-    <Style x:Key="ChipLabel" TargetType="Label">
-        <Setter Property="TextColor"       Value="{StaticResource TextSecondary}" />
-        <Setter Property="FontSize"        Value="13" />
-        <Setter Property="FontAttributes"  Value="Bold" />
-        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="FontFamily"    Value="Courier New, Courier, monospace" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════════════════
@@ -400,6 +530,23 @@
         <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="12" />
         <Setter Property="Margin"    Value="0,2,0,0" />
+    </Style>
+
+    <!-- "✓ Copied" badge on chunk cards -->
+    <Style x:Key="CopiedBadgeBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource AccentGreenBg}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentGreenBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 6" />
+        <Setter Property="Padding"         Value="8,3" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="CopiedBadgeLabel" TargetType="Label">
+        <Setter Property="Text"           Value="✓ Copied" />
+        <Setter Property="TextColor"      Value="{StaticResource AccentGreen}" />
+        <Setter Property="FontSize"       Value="11" />
+        <Setter Property="FontAttributes" Value="Bold" />
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════════════════
