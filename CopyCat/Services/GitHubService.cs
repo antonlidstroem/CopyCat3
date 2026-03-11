@@ -13,6 +13,8 @@ public class GitHubService : IGitHubService
         _httpFactory = httpFactory;
     }
 
+    // ── Branch listing ─────────────────────────────────────────────────────
+
     public async Task<List<string>> FetchBranchesAsync(
         string            repoUrl,
         string?           accessToken,
@@ -44,8 +46,15 @@ public class GitHubService : IGitHubService
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+        // BUG FIX #12: the old catch-all swallowed OperationCanceledException,
+        // so pressing Abort during branch loading had no effect — the spinner
+        // kept running and an empty list was silently returned.
+        // Re-throw cancellation before the generic handler.
+        catch (OperationCanceledException) { throw; }
         catch { return []; }
     }
+
+    // ── File fetch ─────────────────────────────────────────────────────────
 
     public async Task<List<(string Path, string Content)>> FetchFilesAsync(
         string              repoUrl,
@@ -170,7 +179,7 @@ public class GitHubService : IGitHubService
                 if (string.IsNullOrEmpty(relativePath))                  continue;
                 if (IsInExcludedFolder(relativePath, excludedFolderSet)) continue;
 
-                var ext = System.IO.Path.GetExtension(entry.Name).ToLowerInvariant();
+                var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
                 if (!extSet.Contains(ext))                               continue;
 
                 if (patternList.Count > 0 && MatchesAnyPattern(entry.Name, patternList)) continue;
@@ -196,6 +205,8 @@ public class GitHubService : IGitHubService
         progress?.Report($"Done! {results.Count} files from '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {

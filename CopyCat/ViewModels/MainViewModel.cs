@@ -23,8 +23,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool                     _initialized;
     private bool                     _disposed;
 
+    // ── Event-handler lists for explicit unsubscription ────────────────────
+
     private readonly List<(FileTypeFilter Filter, PropertyChangedEventHandler Handler)> _fileTypeHandlers = [];
-    private readonly List<(CodeChunk Chunk, PropertyChangedEventHandler Handler)>       _chunkHandlers    = [];
+    private readonly List<(CodeChunk      Chunk,  PropertyChangedEventHandler Handler)> _chunkHandlers    = [];
+
+    // BUG FIX #1 + #8: prompt handlers must be tracked so we can (a) enforce
+    // radio-button behaviour without a broken TapGestureRecognizer on the
+    // CheckBox, and (b) unsubscribe in Dispose() to prevent memory leaks.
+    private readonly List<(PromptItem Prompt, PropertyChangedEventHandler Handler)> _promptHandlers = [];
 
     // ── Events for code-behind dialogs ─────────────────────────────────────
     public event EventHandler<List<string>>? BranchPickerRequested;
@@ -64,7 +71,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // ── Branch button label ────────────────────────────────────────────────
 
-    /// <summary>Text shown on the branch button; falls back to placeholder when empty.</summary>
     public string BranchButtonLabel =>
         string.IsNullOrWhiteSpace(Branch) ? "Select branch…" : Branch;
 
@@ -143,8 +149,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (value is null) return;
         RepoUrl = value.Url;
         Branch  = value.Branch;
+
         if (value.HasToken)
-            _ = LoadTokenForRepoAsync(value);
+        {
+            // BUG FIX #6: fire-and-forget must log exceptions rather than
+            // silently swallowing them.  Use the safe wrapper below.
+            FireAndForget(LoadTokenForRepoAsync(value));
+        }
     }
 
     public bool HasSavedRepos  => SavedRepos.Count > 0;
@@ -152,7 +163,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // ── Prompt selection for share ─────────────────────────────────────────
 
-    /// <summary>The single prompt currently checked for inclusion in shares, or null.</summary>
+    /// <summary>The single prompt currently checked for share-prepend, or null.</summary>
     public PromptItem? SelectedPrompt => Prompts.FirstOrDefault(p => p.IsSelectedForShare);
 
     // ── Collections ────────────────────────────────────────────────────────
@@ -191,6 +202,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         InitFilePatternFilters();
 
         SavedRepos.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSavedRepos));
+    }
+
+    // ── Safe fire-and-forget helper ────────────────────────────────────────
+
+    // BUG FIX #6: centralise all fire-and-forget calls so exceptions are
+    // always at least logged rather than silently discarded.
+    private void FireAndForget(Task task)
+    {
+        task.ContinueWith(
+            t => _logger.LogWarning(t.Exception, "Fire-and-forget task faulted."),
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     // ── Init ───────────────────────────────────────────────────────────────
@@ -246,9 +268,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
+            // BUG FIX #1 + #8: unsubscribe all existing handlers before
+            // rebuilding the list to avoid leaking stale subscriptions.
+            UnsubscribeAllPrompts();
             Prompts.Clear();
             foreach (var r in await _db.GetPromptsAsync())
-                Prompts.Add(PromptItem.FromRecord(r));
+            {
+                var item = PromptItem.FromRecord(r);
+                SubscribePrompt(item);
+                Prompts.Add(item);
+            }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not load prompts."); }
     }
@@ -359,14 +388,60 @@ public partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedTokensLabel));
     }
 
+    // ── Prompt subscriptions (BUG FIX #1 — radio-button via PropertyChanged) ─
+
+    /// <summary>
+    /// Subscribes to a PromptItem's PropertyChanged so that when the user
+    /// checks its IsSelectedForShare checkbox, all other prompts are
+    /// automatically unchecked (radio-button behaviour).
+    ///
+    /// This replaces the broken TapGestureRecognizer + TwoWay-binding
+    /// approach that caused the checkbox to immediately uncheck itself.
+    /// </summary>
+    private void SubscribePrompt(PromptItem prompt)
+    {
+        PropertyChangedEventHandler h = (sender, e) =>
+        {
+            if (e.PropertyName != nameof(PromptItem.IsSelectedForShare)) return;
+            if (sender is not PromptItem changed) return;
+
+            if (changed.IsSelectedForShare)
+            {
+                // Enforce single-select: clear every other prompt
+                foreach (var p in Prompts)
+                    if (!ReferenceEquals(p, changed))
+                        p.IsSelectedForShare = false;
+            }
+
+            OnPropertyChanged(nameof(SelectedPrompt));
+        };
+
+        prompt.PropertyChanged += h;
+        _promptHandlers.Add((prompt, h));
+    }
+
+    private void UnsubscribeAllPrompts()
+    {
+        foreach (var (prompt, h) in _promptHandlers) prompt.PropertyChanged -= h;
+        _promptHandlers.Clear();
+    }
+
+    private void UnsubscribePrompt(PromptItem prompt)
+    {
+        var entry = _promptHandlers.FirstOrDefault(x => ReferenceEquals(x.Prompt, prompt));
+        if (entry.Prompt is null) return;
+        entry.Prompt.PropertyChanged -= entry.Handler;
+        _promptHandlers.Remove(entry);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private bool CanFetch() =>
         !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl) && FileTypeFilters.Any(f => f.IsEnabled);
 
-    private List<string>        GetSelectedExtensions()    => FileTypeFilters.Where(f => f.IsEnabled).SelectMany(f => f.Extensions).ToList();
-    private IEnumerable<string> GetExcludedFolders()       => FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name);
-    private IEnumerable<string> GetExcludedFilePatterns()  => FilePatternFilters.Where(f => f.IsEnabled).Select(f => f.Pattern);
+    private List<string>        GetSelectedExtensions()   => FileTypeFilters.Where(f => f.IsEnabled).SelectMany(f => f.Extensions).ToList();
+    private IEnumerable<string> GetExcludedFolders()      => FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name);
+    private IEnumerable<string> GetExcludedFilePatterns() => FilePatternFilters.Where(f => f.IsEnabled).Select(f => f.Pattern);
 
     private static bool IsLocalPath(string p) =>
         (p.Length >= 3 && char.IsLetter(p[0]) && p[1] == ':')
@@ -548,17 +623,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var payload = WithPrompt(chunk.Content);
-            var title   = $"Chunk {chunk.Index + 1} · {chunk.ProjectName}";
-            await _shareService.ShareTextAsync(payload, title);
+            await _shareService.ShareTextAsync(payload, $"Chunk {chunk.Index + 1} · {chunk.ProjectName}");
         }
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
     [RelayCommand]
-    private void TogglePreview(CodeChunk chunk) { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
-
-    [RelayCommand]
-    private void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
+    private void TogglePreview(CodeChunk chunk)
+    {
+        if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded;
+    }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ShareSelectedAsync()
@@ -592,59 +666,79 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await _clipboard.SetTextAsync(prompt.Content);
-            // Reset all copied states; only this one turns green
             foreach (var p in Prompts) p.IsCopied = false;
             prompt.IsCopied = true;
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not copy prompt."); }
     }
 
-    /// <summary>
-    /// Toggles the single-select checkbox for including a prompt in shares.
-    /// Only one prompt can be selected at a time (radio-button behaviour).
-    /// Tapping an already-selected prompt deselects it.
-    /// </summary>
-    [RelayCommand]
-    private void SelectPromptForShare(PromptItem prompt)
-    {
-        if (prompt is null) return;
-        bool wasSelected = prompt.IsSelectedForShare;
-        foreach (var p in Prompts) p.IsSelectedForShare = false;
-        if (!wasSelected) prompt.IsSelectedForShare = true;
-        OnPropertyChanged(nameof(SelectedPrompt));
-    }
-
     [RelayCommand]
     private void StartEditPrompt(PromptItem prompt)
     {
         if (prompt is null) return;
-        prompt.EditTitle = prompt.Title; prompt.EditContent = prompt.Content; prompt.IsEditing = true;
+        prompt.EditTitle = prompt.Title;
+        prompt.EditContent = prompt.Content;
+        prompt.IsEditing = true;
     }
 
     [RelayCommand]
     private async Task SavePromptAsync(PromptItem prompt)
     {
         if (prompt is null) return;
-        prompt.Title = prompt.EditTitle.Trim(); prompt.Content = prompt.EditContent.Trim(); prompt.IsEditing = false;
-        try { var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); prompt.Id = r.Id; }
+
+        // BUG FIX #7: prevent saving an empty title.
+        var title = prompt.EditTitle.Trim();
+        if (string.IsNullOrEmpty(title)) title = "Untitled Prompt";
+
+        prompt.Title   = title;
+        prompt.Content = prompt.EditContent.Trim();
+        prompt.IsEditing = false;
+
+        try
+        {
+            var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt)));
+            prompt.Id = r.Id;
+        }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save prompt."); }
     }
 
     [RelayCommand]
-    private void CancelEditPrompt(PromptItem prompt) { if (prompt is not null) prompt.IsEditing = false; }
+    private void CancelEditPrompt(PromptItem prompt)
+    {
+        if (prompt is null) return;
+        prompt.IsEditing = false;
+
+        // BUG FIX #4: if this prompt was never persisted (Id == 0, i.e. the
+        // user hit "+ New prompt" and then cancelled), remove the ghost card
+        // from the list entirely rather than leaving an empty-titled entry.
+        if (prompt.Id == 0)
+        {
+            UnsubscribePrompt(prompt);
+            Prompts.Remove(prompt);
+        }
+    }
 
     [RelayCommand]
     private async Task DeletePromptAsync(PromptItem prompt)
     {
         if (prompt is null || prompt.IsBuiltIn) return;
-        try { await _db.DeletePromptAsync(prompt.Id); Prompts.Remove(prompt); }
+        try
+        {
+            await _db.DeletePromptAsync(prompt.Id);
+            UnsubscribePrompt(prompt);
+            Prompts.Remove(prompt);
+        }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not delete prompt."); }
     }
 
     [RelayCommand]
     private void AddNewPrompt()
     {
-        Prompts.Add(new PromptItem { IsEditing = true, EditTitle = "New Prompt", EditContent = "" });
+        // BUG FIX #1: subscribe the new item so its IsSelectedForShare
+        // changes are handled by the radio-button logic.
+        var item = new PromptItem { IsEditing = true, EditTitle = "New Prompt", EditContent = "" };
+        SubscribePrompt(item);
+        Prompts.Add(item);
     }
 
     // ── URL / repo management ──────────────────────────────────────────────
@@ -658,11 +752,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(text)) RepoUrl = text.Trim().Trim('"');
     }
 
-    /// <summary>Selects a saved repo (fills URL and Branch fields).</summary>
     [RelayCommand]
     private void SelectRepo(SavedRepo repo) => SelectedSavedRepo = repo;
 
-    /// <summary>Removes a single saved repo from the database.</summary>
     [RelayCommand]
     private async Task DeleteRepoAsync(SavedRepo repo)
     {
@@ -670,21 +762,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await _db.DeleteRepoAsync(repo.Id);
-            // Clear SecureStorage token if present
-            try { SecureStorage.Default.Remove($"repo_token_{repo.Id}"); } catch { /* ignore */ }
-            // If this was the selected repo, deselect
+            try { SecureStorage.Default.Remove($"repo_token_{repo.Id}"); } catch { /* platform may not support */ }
             if (SelectedSavedRepo?.Id == repo.Id) SelectedSavedRepo = null;
             await RefreshSavedReposAsync();
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not delete repo {Id}.", repo.Id); }
     }
 
-    /// <summary>Clears the current selection (deselects without deleting).</summary>
     [RelayCommand]
     private void ClearSelectedRepo() => SelectedSavedRepo = null;
 
     [RelayCommand]
-    private void RenameSelectedRepo() { if (SelectedSavedRepo is not null) RepoRenameRequested?.Invoke(this, SelectedSavedRepo); }
+    private void RenameSelectedRepo()
+    {
+        if (SelectedSavedRepo is not null) RepoRenameRequested?.Invoke(this, SelectedSavedRepo);
+    }
 
     public async Task SetRepoNameAsync(SavedRepo repo, string name)
     {
@@ -700,8 +792,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ClearToken()
     {
-        try { SecureStorage.Default.Remove("github_token"); } catch (Exception ex) { _logger.LogWarning(ex, "Remove token failed."); }
-        AccessToken = string.Empty; TokenIsSaved = false;
+        try { SecureStorage.Default.Remove("github_token"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Remove token failed."); }
+        AccessToken = string.Empty;
+        TokenIsSaved = false;
     }
 
     // ── Keyword filter ─────────────────────────────────────────────────────
@@ -777,9 +871,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
         _cts?.Cancel(); _cts?.Dispose(); _cts = null;
+
         foreach (var (f, h) in _fileTypeHandlers) f.PropertyChanged -= h;
         _fileTypeHandlers.Clear();
+
         UnsubscribeAllChunks();
+
+        // BUG FIX #8: prompt handlers were never cleaned up — this caused
+        // PromptItem instances to be held alive by dangling event references.
+        UnsubscribeAllPrompts();
     }
 }

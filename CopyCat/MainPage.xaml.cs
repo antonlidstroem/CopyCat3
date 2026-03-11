@@ -12,7 +12,7 @@ public partial class MainPage : ContentPage
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
 
-        // Branch picker: ViewModel signals us to open native action sheet
+        // Branch picker: ViewModel signals us to open a native action sheet
         _viewModel.BranchPickerRequested += async (_, branches) =>
         {
             var result = await DisplayActionSheet(
@@ -55,12 +55,24 @@ public partial class MainPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _viewModel.InitializeAsync();
 
-        if (!string.IsNullOrWhiteSpace(SharedUrlService.PendingUrl))
+        // BUG FIX #14: async void OnAppearing was unguarded — any exception
+        // thrown by InitializeAsync() would be unhandled and silently crash
+        // the app on some MAUI versions.  Wrap in try/catch and surface the
+        // error through StatusText so the user has actionable feedback.
+        try
         {
-            _viewModel.RepoUrl          = SharedUrlService.PendingUrl;
-            SharedUrlService.PendingUrl = null;
+            await _viewModel.InitializeAsync();
+
+            if (!string.IsNullOrWhiteSpace(SharedUrlService.PendingUrl))
+            {
+                _viewModel.RepoUrl          = SharedUrlService.PendingUrl;
+                SharedUrlService.PendingUrl = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _viewModel.StatusText = $"⚠️ Startup error: {ex.Message}";
         }
     }
 }

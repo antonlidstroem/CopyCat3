@@ -33,7 +33,7 @@
                 <VerticalStackLayout Spacing="0">
                     <Label Text="REPOSITORY" Style="{StaticResource SectionTitle}" />
 
-                    <!-- GitHub URL or local path -->
+                    <!-- URL entry + clear + paste -->
                     <Label Text="GitHub URL or local path" Style="{StaticResource FieldLabel}" />
                     <Border Style="{StaticResource InputBorder}" Margin="0,0,0,10">
                         <Grid ColumnDefinitions="*,Auto,Auto">
@@ -59,16 +59,23 @@
                         </Grid>
                     </Border>
 
-                    <!-- ── Saved repos list (one row per repo, with per-row delete) ── -->
-                    <VerticalStackLayout IsVisible="{Binding HasSavedRepos}" Spacing="0" Margin="0,0,0,10">
+                    <!-- ── Saved repos list ──
+                         BUG FIX #3: the old BindableLayout inside a Border with
+                         MaximumHeightRequest had no ScrollView, so rows beyond
+                         the height cap were silently clipped.  Replaced with a
+                         CollectionView (BUG FIX #10) which handles its own
+                         virtualisation and responds correctly to
+                         ObservableCollection changes on all platforms. -->
+                    <VerticalStackLayout IsVisible="{Binding HasSavedRepos}"
+                                         Spacing="0" Margin="0,0,0,10">
 
-                        <!-- Sub-header: label + rename (only when a repo is selected) + deselect -->
+                        <!-- Sub-header -->
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,6">
                             <Label Grid.Column="0"
                                    Text="Recent repositories"
                                    Style="{StaticResource FieldLabel}"
                                    Margin="0" VerticalOptions="Center" />
-                            <!-- Rename: only visible when a repo is selected -->
+                            <!-- Rename: visible only when a repo is selected -->
                             <Button Grid.Column="1"
                                     Style="{StaticResource SmallIconBtn}"
                                     Text="✎  Rename"
@@ -76,7 +83,7 @@
                                     IsVisible="{Binding HasSelectedRepo}"
                                     ToolTipProperties.Text="Rename selected repository"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
-                            <!-- Deselect (clears selection, does NOT delete) -->
+                            <!-- Deselect — clears selection without deleting -->
                             <Button Grid.Column="2"
                                     Style="{StaticResource SmallIconBtn}"
                                     Text="✕"
@@ -86,19 +93,18 @@
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                         </Grid>
 
-                        <!-- List of saved repos — each row selectable + per-row delete -->
+                        <!-- Repo rows — CollectionView gives reliable
+                             dynamic-update behaviour and built-in scrolling -->
                         <Border Style="{StaticResource SavedReposListBorder}">
-                            <VerticalStackLayout Spacing="0">
-                                <BindableLayout.ItemsSource>
-                                    <Binding Path="SavedRepos" />
-                                </BindableLayout.ItemsSource>
-                                <BindableLayout.ItemTemplate>
+                            <CollectionView ItemsSource="{Binding SavedRepos}"
+                                            SelectionMode="None"
+                                            MaximumHeightRequest="220">
+                                <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:SavedRepo">
                                         <Grid ColumnDefinitions="*,Auto"
-                                              Padding="10,8"
-                                              BackgroundColor="Transparent">
+                                              Padding="10,8">
 
-                                            <!-- Repo name — tap to select -->
+                                            <!-- Tap label → select this repo -->
                                             <Label Grid.Column="0"
                                                    Text="{Binding DisplayName}"
                                                    Style="{StaticResource SavedRepoRowLabel}"
@@ -110,7 +116,7 @@
                                                 </Label.GestureRecognizers>
                                             </Label>
 
-                                            <!-- Per-row delete button -->
+                                            <!-- Per-row delete — removes only this repo -->
                                             <Button Grid.Column="1"
                                                     Style="{StaticResource SmallIconBtn}"
                                                     Text="🗑"
@@ -119,27 +125,56 @@
                                                     ToolTipProperties.Text="Remove this repository" />
                                         </Grid>
                                     </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
                         </Border>
                     </VerticalStackLayout>
 
-                    <!-- ── Branch — single button, shows chosen branch name ── -->
+                    <!-- ── Branch ──
+                         BUG FIX #5: a Button with ContentLayout="Left,8" only
+                         repositions an *image* icon relative to text; for a
+                         text-only button the property has no effect and text
+                         stays centred — making it look nothing like an input.
+                         Replaced with a tappable Grid + Label inside the same
+                         InputBorder style used by the other fields. -->
                     <Label Text="Branch" Style="{StaticResource FieldLabel}" />
                     <Border Style="{StaticResource InputBorder}" Margin="0,0,0,10">
-                        <Grid>
-                            <!-- Branch button: text = current branch name (or placeholder) -->
-                            <Button Style="{StaticResource BranchBtn}"
-                                    Text="{Binding BranchButtonLabel}"
-                                    Command="{Binding ShowBranchPickerCommand}"
-                                    IsVisible="{Binding IsFetchingBranches, Converter={StaticResource InverseBool}}"
-                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                    ToolTipProperties.Text="Tap to load and select branch" />
-                            <!-- Spinner while loading branches -->
-                            <StackLayout Orientation="Horizontal" Spacing="10"
-                                         HorizontalOptions="Center" VerticalOptions="Center"
-                                         IsVisible="{Binding IsFetchingBranches}"
-                                         HeightRequest="50">
+                        <Grid HeightRequest="50">
+                            <!-- Normal state: label shows current branch name -->
+                            <Grid IsVisible="{Binding IsFetchingBranches, Converter={StaticResource InverseBool}}"
+                                  ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0"
+                                       Text="{Binding BranchButtonLabel}"
+                                       Style="{StaticResource BranchPickerLabel}"
+                                       VerticalOptions="Center"
+                                       Margin="12,0,0,0">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ShowBranchPickerCommand}"
+                                                              CommandParameter="{Binding .}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Label Grid.Column="1"
+                                       Text="⇅"
+                                       TextColor="{StaticResource TextMuted}"
+                                       FontSize="16"
+                                       VerticalOptions="Center"
+                                       Margin="0,0,12,0">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ShowBranchPickerCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+
+                                <!-- Make the whole row tappable -->
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding ShowBranchPickerCommand}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+
+                            <!-- Loading state: spinner + label -->
+                            <HorizontalStackLayout IsVisible="{Binding IsFetchingBranches}"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"
+                                                   Spacing="10">
                                 <ActivityIndicator IsRunning="{Binding IsFetchingBranches}"
                                                    Color="{StaticResource AccentPrimary}"
                                                    HeightRequest="20" WidthRequest="20"
@@ -147,12 +182,13 @@
                                 <Label Text="Loading branches…"
                                        TextColor="{StaticResource TextMuted}"
                                        FontSize="13" VerticalOptions="Center" />
-                            </StackLayout>
+                            </HorizontalStackLayout>
                         </Grid>
                     </Border>
 
-                    <!-- ── GitHub Token ── -->
-                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,4" ColumnSpacing="6">
+                    <!-- GitHub Token -->
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                          Margin="0,0,0,4" ColumnSpacing="6">
                         <Label Grid.Column="0"
                                Text="GitHub Token (private repos)"
                                Style="{StaticResource FieldLabel}"
@@ -160,9 +196,7 @@
                         <Label Grid.Column="1"
                                Text="ⓘ"
                                TextColor="{StaticResource AccentPrimary}"
-                               FontSize="16"
-                               VerticalOptions="Center"
-                               Margin="2,0,0,0">
+                               FontSize="16" VerticalOptions="Center" Margin="2,0,0,0">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ShowTokenInfoCommand}" />
                             </Label.GestureRecognizers>
@@ -175,7 +209,7 @@
                                    FontSize="11" FontAttributes="Bold" />
                         </Border>
                     </Grid>
-                    <Border Style="{StaticResource InputBorder}" Margin="0,0,0,0">
+                    <Border Style="{StaticResource InputBorder}">
                         <Grid ColumnDefinitions="*,Auto">
                             <Entry Grid.Column="0"
                                    Style="{StaticResource InputEntry}"
@@ -202,7 +236,8 @@
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Label Grid.Column="0" Text="KEYWORD FILTER"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                Text="{Binding IsKeywordExpanded, Converter={StaticResource ExpandArrowConv}}"
                                TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
@@ -245,7 +280,8 @@
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                         <Label Grid.Column="0" Text="FILE TYPES"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource ToggleAllBtn}"
                                 Text="Toggle all"
@@ -262,6 +298,7 @@
                             <TapGestureRecognizer Command="{Binding ToggleFileTypesCommand}" />
                         </Grid.GestureRecognizers>
                     </Grid>
+
                     <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
                                 IsVisible="{Binding IsFileTypesExpanded}">
                         <BindableLayout.ItemsSource>
@@ -292,7 +329,8 @@
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                         <Label Grid.Column="0" Text="EXCLUDE FOLDERS"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource ToggleAllBtn}"
                                 Text="Toggle all"
@@ -357,7 +395,8 @@
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                         <Label Grid.Column="0" Text="EXCLUDE FILE PATTERNS"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource ToggleAllBtn}"
                                 Text="Toggle all"
@@ -426,12 +465,14 @@
                 <VerticalStackLayout Spacing="0">
                     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                         <Label Grid.Column="0" Text="MAX TOKENS / CHUNK"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Border Grid.Column="1" Style="{StaticResource TokenBadgeBorder}">
-                            <Label Text="{Binding MaxTokensLabel}" Style="{StaticResource TokenBadgeLabel}" />
+                            <Label Text="{Binding MaxTokensLabel}"
+                                   Style="{StaticResource TokenBadgeLabel}" />
                         </Border>
                     </Grid>
-                    <!-- Warning ABOVE slider -->
+                    <!-- Warning text above the slider -->
                     <Label Text="{Binding SliderWarningText}"
                            TextColor="{Binding SliderWarningColor}"
                            Style="{StaticResource SliderWarningLabel}" />
@@ -446,13 +487,14 @@
                         <Label Grid.Column="0" Text="1 000"
                                TextColor="{StaticResource TextDim}" FontSize="10" />
                         <Label Grid.Column="1" Text="30 000"
-                               TextColor="{StaticResource TextDim}" FontSize="10" HorizontalOptions="End" />
+                               TextColor="{StaticResource TextDim}" FontSize="10"
+                               HorizontalOptions="End" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
 
             <!-- ════════════════════════════════════════════════════
-                 CHUNK BUTTON
+                 CHUNK BUTTON + ABORT / RESET
                  ════════════════════════════════════════════════════ -->
             <Button Text="Chunk"
                     Style="{StaticResource PrimaryBtn}"
@@ -476,7 +518,8 @@
                  ACTIVITY / STATUS / ERROR
                  ════════════════════════════════════════════════════ -->
             <VerticalStackLayout IsVisible="{Binding IsBusy}"
-                                 HorizontalOptions="Center" Spacing="10" Margin="0,0,0,10">
+                                 HorizontalOptions="Center"
+                                 Spacing="10" Margin="0,0,0,10">
                 <ActivityIndicator IsRunning="{Binding IsBusy}"
                                    Color="{StaticResource ActivityIndicatorColor}"
                                    HeightRequest="36" WidthRequest="36"
@@ -484,7 +527,8 @@
                 <Label Text="{Binding StatusText}"
                        TextColor="{StaticResource TextSecondary}"
                        FontSize="14" HorizontalOptions="Center"
-                       HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="WordWrap" />
             </VerticalStackLayout>
 
             <Border Style="{StaticResource StatusBorder}"
@@ -525,17 +569,30 @@
 
             <!-- ════════════════════════════════════════════════════
                  AI PROMPTS  (collapsible)
-                 · Tap card     → copy to clipboard (card turns green)
-                 · CheckBox     → select prompt to prepend on share
-                 · ✎            → edit inline
-                 · ✕            → delete (custom prompts only)
+
+                 · Tap title/preview area  → copy to clipboard
+                   (card turns green; only one at a time)
+                 · CheckBox (left)         → select prompt to prepend
+                   on share (radio-button; only one at a time, handled
+                   entirely in ViewModel via PropertyChanged subscription —
+                   BUG FIX #1)
+                 · ✎                       → edit inline
+                 · ✕                       → delete (custom only)
+
+                 BUG FIX #2: previously both the inner VerticalStackLayout
+                 AND the parent Grid carried CopyPromptCommand gestures,
+                 causing the clipboard to be written twice per tap and
+                 IsCopied to toggle back to false.  The parent Grid gesture
+                 is removed; only the title/preview VSL carries the tap.
                  ════════════════════════════════════════════════════ -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding HasChunks}">
                 <VerticalStackLayout Spacing="0">
 
+                    <!-- Header row -->
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Grid.Column="0" Text="AI PROMPTS"
-                               Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0" VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                Text="{Binding IsPromptsExpanded, Converter={StaticResource ExpandArrowConv}}"
                                TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
@@ -550,20 +607,16 @@
 
                     <VerticalStackLayout IsVisible="{Binding IsPromptsExpanded}" Spacing="0">
 
-                        <Label Text="Tap a prompt to copy it to the clipboard. Check one to prepend it automatically when sharing chunks."
+                        <Label Text="Tap a prompt to copy it. Check one to prepend it automatically when sharing chunks."
                                Style="{StaticResource HintLabel}" Margin="0,0,0,10" />
 
                         <CollectionView ItemsSource="{Binding Prompts}" SelectionMode="None">
                             <CollectionView.ItemTemplate>
                                 <DataTemplate x:DataType="models:PromptItem">
 
-                                    <!-- Whole card tappable → copy (card turns green).
-                                         CardBackgroundColor / CardBorderColor handle copied (green)
-                                         and selected-for-share (blue) states. -->
                                     <Border Style="{StaticResource PromptCardBorder}"
                                             BackgroundColor="{Binding CardBackgroundColor}"
                                             Stroke="{Binding CardBorderColor}">
-
                                         <VerticalStackLayout Spacing="0">
 
                                             <!-- ── VIEW MODE ── -->
@@ -572,21 +625,25 @@
                                                   Padding="12,12,10,12"
                                                   IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}">
 
-                                                <!-- Share-select checkbox (single-select, radio behaviour) -->
+                                                <!-- Share-select checkbox.
+                                                     BUG FIX #1: TwoWay binding on IsChecked is all
+                                                     that is needed here.  The ViewModel's
+                                                     SubscribePrompt handler enforces single-select
+                                                     by listening to PropertyChanged, so we do NOT
+                                                     add a TapGestureRecognizer on this CheckBox —
+                                                     that was what caused the immediate self-uncheck. -->
                                                 <CheckBox Grid.Column="0"
                                                           IsChecked="{Binding IsSelectedForShare}"
                                                           Color="{StaticResource AccentPrimary}"
                                                           VerticalOptions="Center"
-                                                          Margin="0,0,4,0">
-                                                    <CheckBox.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SelectPromptForShareCommand}"
-                                                            CommandParameter="{Binding .}" />
-                                                    </CheckBox.GestureRecognizers>
-                                                </CheckBox>
+                                                          Margin="0,0,4,0" />
 
-                                                <!-- Title + preview — tap whole area to copy -->
-                                                <VerticalStackLayout Grid.Column="1" Spacing="2"
+                                                <!-- Title + preview tappable area → copy.
+                                                     BUG FIX #2: gesture is ONLY on the inner VSL;
+                                                     the parent Grid no longer carries a duplicate
+                                                     CopyPromptCommand gesture. -->
+                                                <VerticalStackLayout Grid.Column="1"
+                                                                     Spacing="2"
                                                                      VerticalOptions="Center">
                                                     <Label Text="{Binding Title}"
                                                            Style="{StaticResource PromptTitleLabel}" />
@@ -599,7 +656,7 @@
                                                     </VerticalStackLayout.GestureRecognizers>
                                                 </VerticalStackLayout>
 
-                                                <!-- Edit button -->
+                                                <!-- Edit -->
                                                 <Button Grid.Column="2"
                                                         Style="{StaticResource SmallIconBtn}"
                                                         Text="✎"
@@ -616,12 +673,8 @@
                                                         IsVisible="{Binding IsBuiltIn, Converter={StaticResource InverseBool}}"
                                                         ToolTipProperties.Text="Delete prompt" />
 
-                                                <!-- Tap anywhere on the row (except buttons) → copy -->
-                                                <Grid.GestureRecognizers>
-                                                    <TapGestureRecognizer
-                                                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyPromptCommand}"
-                                                        CommandParameter="{Binding .}" />
-                                                </Grid.GestureRecognizers>
+                                                <!-- NOTE: NO Grid.GestureRecognizers here.
+                                                     Removed duplicate CopyPromptCommand (BUG FIX #2). -->
                                             </Grid>
 
                                             <!-- ── EDIT MODE ── -->
@@ -635,14 +688,17 @@
                                                                Placeholder="Prompt title" />
                                                     </Border>
 
-                                                    <Label Text="Prompt text" Style="{StaticResource FieldLabel}" Margin="0,6,0,0" />
+                                                    <Label Text="Prompt text"
+                                                           Style="{StaticResource FieldLabel}"
+                                                           Margin="0,6,0,0" />
                                                     <Border Style="{StaticResource InputBorder}">
                                                         <Editor Style="{StaticResource InlineEditor}"
                                                                 Text="{Binding EditContent}"
                                                                 Placeholder="Write your prompt… use [PASTE CHUNK] as a placeholder for the code." />
                                                     </Border>
 
-                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,6,0,0">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto"
+                                                          ColumnSpacing="8" Margin="0,6,0,0">
                                                         <Label Grid.Column="0"
                                                                Text="Use [PASTE CHUNK] to mark where the code goes."
                                                                Style="{StaticResource HintLabel}"
@@ -679,16 +735,17 @@
 
             <!-- ════════════════════════════════════════════════════
                  CHUNK LIST
-                 · Tap card     → copy to clipboard (card turns green)
-                 · ↗            → share via share sheet
-                 · ▼/▲          → preview file list
-                 · CheckBox     → multi-select for batch share
+                 · Tap row body  → copy to clipboard (green)
+                 · ↗             → share via share sheet
+                 · ▼/▲           → preview file list
+                 · CheckBox      → multi-select for batch share
                  ════════════════════════════════════════════════════ -->
             <VerticalStackLayout IsVisible="{Binding HasChunks}" Spacing="0">
 
                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
                     <Label Grid.Column="0" Text="CHUNKS"
-                           Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                           Style="{StaticResource SectionTitle}"
+                           Margin="0" VerticalOptions="Center" />
                     <Label Grid.Column="1"
                            Text="{Binding HasSelection, Converter={StaticResource SelectionHintConv}}"
                            TextColor="{StaticResource TextMuted}" FontSize="11" VerticalOptions="Center" />
@@ -744,7 +801,6 @@
                                                Text="{Binding SubLabel}"
                                                Style="{StaticResource ChunkSubLabel}" />
 
-                                        <!-- Action buttons: share ↗ | preview ▼/▲ -->
                                         <HorizontalStackLayout Grid.Row="0" Grid.Column="2"
                                                                Grid.RowSpan="2"
                                                                Spacing="0" VerticalOptions="Center">
@@ -761,7 +817,6 @@
                                                     ToolTipProperties.Text="Preview file list" />
                                         </HorizontalStackLayout>
 
-                                        <!-- Tap row → copy -->
                                         <Grid.GestureRecognizers>
                                             <TapGestureRecognizer
                                                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
