@@ -180,9 +180,9 @@
     </Style>
 
     <Style x:Key="HeaderCard" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AccentPrimary}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource AccentPrimaryLight}" />
         <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Stroke"          Value="{StaticResource BorderChipOnFolder}" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentPrimary}" />
         <Setter Property="StrokeShape"     Value="Rectangle 14" />
         <Setter Property="Padding"         Value="14" />
         <Setter Property="Margin"          Value="0,0,0,10" />

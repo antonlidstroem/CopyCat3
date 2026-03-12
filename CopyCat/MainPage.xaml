@@ -7,6 +7,7 @@
              x:Class="CopyCat.MainPage"
              x:DataType="vm:MainViewModel"
              x:Name="ThisPage"
+             BackgroundColor="#F59E0B"
              >
 
     <Grid RowDefinitions="*,Auto">
@@ -18,67 +19,19 @@
             <VerticalStackLayout Padding="14,14,14,8" Spacing="0">
 
 
-                <Border Style="{StaticResource HeaderCard}" >
-                    <Grid ColumnDefinitions="50,*,Auto" ColumnSpacing="14">
-
-                        <Image Grid.Column="0" Source="copycat_logo.svg"
-                                 HeightRequest="52" WidthRequest="52"
-                                 VerticalOptions="Center" />
-
-                        <Label Grid.Column="1"
-                           Text="⚙"
-                           FontSize="22"
-                           TextColor="{StaticResource TextMuted}"
-                           VerticalOptions="Center"
-                           IsVisible="{Binding IsResultsMode}"
-                           ToolTipProperties.Text="Edit configuration">
-                            <Label.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding BackToConfigurationCommand}" />
-                            </Label.GestureRecognizers>
-                        </Label>
-                    </Grid>
-                </Border>
+                
                
                 
                 <!-- ════════════════════════════════════════════════════
                      HEADER CARD
                      ════════════════════════════════════════════════════ -->
-                <!--<Border Style="{StaticResource Card}" Margin="0,0,0,12">
-                    <Grid ColumnDefinitions="56,*,Auto" ColumnSpacing="14">
-                        <Image Grid.Column="0" Source="copycat_logo.svg"
-                               HeightRequest="52" WidthRequest="52"
+
+                <Image Source="copycat_logo.svg"
+                               HeightRequest="100" 
+                               WidthRequest="100"
+                               HorizontalOptions="Center" 
                                VerticalOptions="Center" />
 
-                        <VerticalStackLayout Grid.Column="1"
-                                             Spacing="2" VerticalOptions="Center"
-                                             IsVisible="{Binding IsConfigurationMode}">
-                            <Label Text="CopyCat" Style="{StaticResource HeaderTitle}" />
-                            <Label Text="GitHub · local path → chunks → AI"
-                                   Style="{StaticResource HeaderSubtitle}" />
-                        </VerticalStackLayout>
-
-                        <VerticalStackLayout Grid.Column="1"
-                                             Spacing="3" VerticalOptions="Center"
-                                             IsVisible="{Binding IsResultsMode}">
-                            <Label Text="CopyCat" Style="{StaticResource HeaderTitle}"
-                                   FontSize="18" />
-                            <Label Text="{Binding CompactSummaryText}"
-                                   Style="{StaticResource CompactSummaryLabel}" />
-                        </VerticalStackLayout>
-
-                        <Label Grid.Column="2"
-                               Text="⚙"
-                               FontSize="22"
-                               TextColor="{StaticResource TextMuted}"
-                               VerticalOptions="Center"
-                               IsVisible="{Binding IsResultsMode}"
-                               ToolTipProperties.Text="Edit configuration">
-                            <Label.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding BackToConfigurationCommand}" />
-                            </Label.GestureRecognizers>
-                        </Label>
-                    </Grid>
-                </Border>-->
 
                 <!-- ════════════════════════════════════════════════════
                      CONFIGURATION PANEL
@@ -708,10 +661,10 @@
                     </VerticalStackLayout>
 
                     <!-- Status (idle) -->
-                    <Border Style="{StaticResource StatusBorder}"
+                    <!--<Border Style="{StaticResource StatusBorder}"
                             IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}">
                         <Label Text="{Binding StatusText}" Style="{StaticResource StatusLabel}" />
-                    </Border>
+                    </Border>-->
 
                     <!-- Error -->
                     <Border Style="{StaticResource ErrorBorder}" IsVisible="{Binding HasError}">
@@ -1085,7 +1038,8 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 1 — SMART ACTION BAR
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="1" Style="{StaticResource SmartActionBarBorder}">
+        <Border Grid.Row="1" Style="{StaticResource SmartActionBarBorder}"
+                Padding="16,12,16,50">
             <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
 
                 <!-- Busy row -->
@@ -1112,7 +1066,7 @@
 
                 <!-- Config mode: primary Chunk button -->
                 <Button Grid.Row="1"
-                        Text="⚡  Chunk"
+                        Text="⚡"
                         Style="{StaticResource PrimaryBtn}"
                         Command="{Binding FetchCommand}"
                         IsVisible="{Binding IsConfigurationMode}"
@@ -1133,9 +1087,11 @@
                             Command="{Binding BackToConfigurationCommand}"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                 </Grid>
+                
 
             </Grid>
         </Border>
+      
 
     </Grid>
 </ContentPage>
