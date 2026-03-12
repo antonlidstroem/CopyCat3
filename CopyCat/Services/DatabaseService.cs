@@ -7,12 +7,6 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 {
     private SQLiteAsyncConnection? _db;
     private readonly string        _dbPath;
-
-    // BUG FIX #11: replaced the plain bool _initialized flag with a
-    // SemaphoreSlim so that:
-    //   (a) concurrent callers cannot both pass the guard simultaneously, and
-    //   (b) if InitializeAsync throws after setting the flag, Db() still
-    //       retries rather than proceeding with _db == null and crashing.
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     public DatabaseService()
@@ -24,12 +18,12 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 
     public async Task InitializeAsync()
     {
-        if (_db is not null) return;   // fast path — no lock needed for reads
+        if (_db is not null) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_db is not null) return;   // another caller finished while we waited
+            if (_db is not null) return;
 
             SQLitePCL.Batteries_V2.Init();
 
@@ -40,8 +34,6 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
             await connection.CreateTableAsync<SavedRepo>();
             await connection.CreateTableAsync<PromptRecord>();
 
-            // Assign only after all setup succeeds so a partial failure
-            // leaves _db null and forces a retry on the next call.
             _db = connection;
 
             await SeedBuiltInPromptsIfEmptyAsync();
@@ -52,11 +44,6 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Returns the open connection, initialising on first use.
-    /// Uses _db null-check (not a bool flag) so a failed init is always
-    /// retried rather than short-circuiting with a null reference.
-    /// </summary>
     private async Task<SQLiteAsyncConnection> Db()
     {
         if (_db is null) await InitializeAsync();
@@ -119,14 +106,32 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         await db.DeleteAsync<PromptRecord>(id);
     }
 
+    /// <summary>
+    /// Wipes ALL prompt rows and re-seeds the default built-in set.
+    /// Separated from <see cref="SeedBuiltInPromptsIfEmptyAsync"/> so
+    /// the seed logic can be called unconditionally without a count guard.
+    /// </summary>
+    public async Task ResetPromptsToDefaultAsync()
+    {
+        var db = await Db();
+        await db.DeleteAllAsync<PromptRecord>();
+        await SeedBuiltInPromptsAsync(db);
+    }
+
     // ── Seeding ────────────────────────────────────────────────────────────
 
+    /// <summary>Seeds only when the table is empty (used on first launch).</summary>
     private async Task SeedBuiltInPromptsIfEmptyAsync()
     {
         var db    = await Db();
         var count = await db.Table<PromptRecord>().CountAsync();
         if (count > 0) return;
+        await SeedBuiltInPromptsAsync(db);
+    }
 
+    /// <summary>Unconditionally inserts the six built-in prompts (table must already be cleared).</summary>
+    private static async Task SeedBuiltInPromptsAsync(SQLiteAsyncConnection db)
+    {
         var builtIns = new[]
         {
             new PromptRecord

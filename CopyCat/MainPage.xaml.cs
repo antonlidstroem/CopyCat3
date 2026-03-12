@@ -12,7 +12,7 @@ public partial class MainPage : ContentPage
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
 
-        // Branch picker: ViewModel signals us to open a native action sheet
+        // ── Branch picker ──────────────────────────────────────────────────
         _viewModel.BranchPickerRequested += async (_, branches) =>
         {
             var result = await DisplayActionSheet(
@@ -21,7 +21,7 @@ public partial class MainPage : ContentPage
                 _viewModel.Branch = result;
         };
 
-        // GitHub token info dialog
+        // ── GitHub token info dialog ───────────────────────────────────────
         _viewModel.TokenInfoRequested += async (_, _) =>
         {
             await DisplayAlert(
@@ -37,7 +37,7 @@ public partial class MainPage : ContentPage
                 "Got it");
         };
 
-        // Repo rename dialog
+        // ── Repo rename dialog ─────────────────────────────────────────────
         _viewModel.RepoRenameRequested += async (_, repo) =>
         {
             var name = await DisplayPromptAsync(
@@ -51,8 +51,7 @@ public partial class MainPage : ContentPage
                 await _viewModel.SetRepoNameAsync(repo, name);
         };
 
-        // History popup — shows the saved-repos list as an action sheet
-        // so the clock icon in the URL field provides a quick-pick overlay.
+        // ── History popup ──────────────────────────────────────────────────
         _viewModel.ShowHistoryRequested += async (_, repos) =>
         {
             if (repos.Count == 0)
@@ -68,6 +67,22 @@ public partial class MainPage : ContentPage
 
             var chosen = repos.FirstOrDefault(r => r.DisplayName == picked);
             if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
+        };
+
+        // ── Reset Prompts — confirmation alert ─────────────────────────────
+        //
+        // The button is wired by x:Name in XAML rather than a command binding
+        // so we can show the DisplayAlert confirmation before executing.
+        // This keeps the ViewModel free of any UI/dialog dependencies.
+        ResetPromptsButton.Clicked += async (_, _) =>
+        {
+            bool confirmed = await DisplayAlert(
+                "Reset prompts",
+                "This will delete all custom prompts and restore the 6 built-in defaults. Continue?",
+                "Reset", "Cancel");
+
+            if (confirmed)
+                await _viewModel.ResetPromptsCommand.ExecuteAsync(null);
         };
     }
 

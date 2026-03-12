@@ -37,6 +37,18 @@ public partial class PromptItem : ObservableObject
     [ObservableProperty] private string _editTitle   = string.Empty;
     [ObservableProperty] private string _editContent = string.Empty;
 
+    // ── Full-text preview toggle ───────────────────────────────────────────
+
+    /// <summary>
+    /// When true the full prompt text is shown below the card title row.
+    /// Toggled by the ▼/▲ chevron button — identical pattern to chunk file preview.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewToggleIcon))]
+    private bool _isPreviewExpanded;
+
+    public string PreviewToggleIcon => IsPreviewExpanded ? "▲" : "▼";
+
     // ── Copy feedback — card turns green ──────────────────────────────────
 
     [ObservableProperty]
@@ -65,6 +77,7 @@ public partial class PromptItem : ObservableObject
 
     // ── Derived ───────────────────────────────────────────────────────────
 
+    /// <summary>Two-line truncated preview shown in collapsed card view.</summary>
     public string PreviewText =>
         Content.Length > 160 ? Content[..160].TrimEnd() + "…" : Content;
 

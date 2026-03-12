@@ -16,4 +16,10 @@ public interface IDatabaseService
     Task<List<PromptRecord>> GetPromptsAsync();
     Task<PromptRecord>       UpsertPromptAsync(PromptRecord prompt);
     Task                     DeletePromptAsync(int id);
+
+    /// <summary>
+    /// Deletes ALL prompt records (custom and built-in) and re-seeds
+    /// the six built-in prompts.  Used by the "Reset to defaults" button.
+    /// </summary>
+    Task ResetPromptsToDefaultAsync();
 }

@@ -13,6 +13,74 @@ public class GitHubService : IGitHubService
         _httpFactory = httpFactory;
     }
 
+    // ── ZIP-based file-type detection (no API call) ────────────────────────
+    //
+    // Downloads the repository archive for the given branch, reads ALL entry
+    // names from the ZipArchive (central directory only — no content read),
+    // counts extensions, and returns a dictionary sorted by frequency.
+    //
+    // Why not use the GitHub Languages API?
+    // The Languages API counts against the 60 req/hour unauthenticated limit.
+    // This zip download uses github.com/archive (not api.github.com) and does
+    // NOT count against API rate limits.  It is the exact same download we
+    // already perform during a full chunk run.
+    //
+    // Extensions with fewer than 2 occurrences are excluded to avoid noise
+    // from stray files (e.g. a single .sh script in a C# repo).
+
+    public async Task<IReadOnlyDictionary<string, int>> DetectFileTypesInRepoAsync(
+        string            repoUrl,
+        string?           accessToken,
+        string            branch,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var zipBytes = await DownloadZipAsync(repoUrl, accessToken, branch, cancellationToken);
+            if (zipBytes is null) return new Dictionary<string, int>();
+
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            using var ms      = new MemoryStream(zipBytes);
+            using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+
+            foreach (var entry in archive.Entries)
+            {
+                // Skip directories and root-level manifest entries
+                if (entry.FullName.EndsWith('/'))     continue;
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+
+                var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
+                if (string.IsNullOrEmpty(ext)) continue;
+
+                // Skip binary / non-code extensions to keep the result clean
+                if (_binaryExtensions.Contains(ext)) continue;
+
+                counts[ext] = counts.GetValueOrDefault(ext, 0) + 1;
+            }
+
+            // Return sorted by count descending, filtering noise (< 2 files)
+            return counts
+                .Where(kv => kv.Value >= 2)
+                .OrderByDescending(kv => kv.Value)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return new Dictionary<string, int>(); }
+    }
+
+    // Binary / asset extensions we never want to suggest as "include" types
+    private static readonly HashSet<string> _binaryExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png",".jpg",".jpeg",".gif",".ico",".svg",".webp",".bmp",".tiff",
+        ".mp3",".mp4",".wav",".ogg",".mov",".avi",
+        ".zip",".gz",".tar",".rar",".7z",
+        ".exe",".dll",".so",".dylib",".a",".lib",
+        ".pdf",".doc",".docx",".xls",".xlsx",".pptx",
+        ".ttf",".otf",".woff",".woff2",".eot",
+        ".db",".sqlite",".lock",".bin",".dat",
+    };
+
     // ── Branch listing ─────────────────────────────────────────────────────
 
     public async Task<List<string>> FetchBranchesAsync(
@@ -28,6 +96,7 @@ public class GitHubService : IGitHubService
             var url     = $"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
+            request.Headers.UserAgent.ParseAdd("CopyCat-MAUI");
 
             if (!string.IsNullOrWhiteSpace(accessToken))
                 request.Headers.Authorization =
@@ -46,10 +115,6 @@ public class GitHubService : IGitHubService
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
-        // BUG FIX #12: the old catch-all swallowed OperationCanceledException,
-        // so pressing Abort during branch loading had no effect — the spinner
-        // kept running and an empty list was silently returned.
-        // Re-throw cancellation before the generic handler.
         catch (OperationCanceledException) { throw; }
         catch { return []; }
     }
@@ -66,14 +131,12 @@ public class GitHubService : IGitHubService
         IProgress<string>?  progress          = null,
         CancellationToken   cancellationToken = default)
     {
-        var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
-
         var extSet            = extensions.Select(e => e.ToLowerInvariant()).ToHashSet();
         var excludedFolderSet = excludedFolders.Select(f => f.ToLowerInvariant().Trim('/')).ToHashSet();
         var patternList       = excludedFilePatterns.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
         bool useApi           = !string.IsNullOrWhiteSpace(accessToken);
 
-        progress?.Report($"Connecting to {owner}/{repo}…");
+        progress?.Report($"Ansluter till repo…");
 
         var trimmedBranch = branch.Trim();
         var candidates = string.IsNullOrWhiteSpace(trimmedBranch)
@@ -83,79 +146,47 @@ public class GitHubService : IGitHubService
                   .Where(b => !b.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase)))
               .ToArray();
 
-        using var http = _httpFactory.CreateClient("github");
-
         HttpResponseMessage? successResponse = null;
         string?              usedBranch      = null;
 
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var url = useApi
-                ? $"https://api.github.com/repos/{owner}/{repo}/zipball/{candidate}"
-                : $"https://github.com/{owner}/{repo}/archive/refs/heads/{candidate}.zip";
-
-            progress?.Report($"Trying branch '{candidate}'…");
+            progress?.Report($"Provar gren '{candidate}'…");
 
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, url);
-                if (useApi)
-                {
-                    request.Headers.Authorization =
-                        new AuthenticationHeaderValue("token", accessToken);
-                    request.Headers.Accept.ParseAdd("application/vnd.github+json");
-                }
+                var response = await TryDownloadBranchAsync(
+                    repoUrl, accessToken, candidate, useApi, cancellationToken);
 
-                var response = await http.SendAsync(
-                    request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
-                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                if (response?.IsSuccessStatusCode == true)
                 {
-                    response.Dispose(); continue;
+                    successResponse = response;
+                    usedBranch      = candidate;
+                    break;
                 }
-                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                {
-                    response.Dispose();
-                    throw new InvalidOperationException(
-                        "GitHub denied access (403 Forbidden). You may have hit the anonymous rate limit. " +
-                        "Enter a GitHub token to increase the limit.");
-                }
-                if (!response.IsSuccessStatusCode)
-                {
-                    response.Dispose();
-                    throw new InvalidOperationException(
-                        $"GitHub responded {(int)response.StatusCode} for '{owner}/{repo}'. " +
-                        (useApi ? "Check that the token is valid and has the correct permissions."
-                                : "Check that the repository exists and is public."));
-                }
-
-                successResponse = response;
-                usedBranch      = candidate;
-                break;
+                response?.Dispose();
             }
             catch (OperationCanceledException) { throw; }
             catch (InvalidOperationException)  { throw; }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Network error: {ex.Message}", ex);
-            }
         }
 
         if (successResponse is null)
+        {
+            var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
             throw new InvalidOperationException(
-                $"Repository '{owner}/{repo}' was not found on any branch " +
-                $"(tried: {string.Join(", ", candidates)}). Check the URL and branch name.");
+                $"Repo '{owner}/{repo}' hittades inte på någon gren " +
+                $"(provade: {string.Join(", ", candidates)}). Kontrollera URL och gren.");
+        }
 
         if (!string.IsNullOrWhiteSpace(trimmedBranch) &&
             !usedBranch!.Equals(trimmedBranch, StringComparison.OrdinalIgnoreCase))
         {
-            progress?.Report($"⚠️ Branch '{trimmedBranch}' not found — using '{usedBranch}' instead.");
+            progress?.Report($"⚠️ Gren '{trimmedBranch}' hittades inte — använder '{usedBranch}'.");
             await Task.Delay(1500, cancellationToken);
         }
 
-        progress?.Report("Downloading and extracting…");
+        progress?.Report("Laddar ner och packar upp…");
 
         var results = new List<(string Path, string Content)>();
 
@@ -192,21 +223,113 @@ public class GitHubService : IGitHubService
                 }
                 catch
                 {
-                    results.Add((relativePath, $"// [Could not read: {relativePath}]"));
+                    results.Add((relativePath, $"// [Kunde inte läsa: {relativePath}]"));
                 }
             }
         }
 
         if (results.Count == 0)
             throw new InvalidOperationException(
-                "No files found with the selected file types. " +
-                "Check that the correct file types are enabled and that folder filters are not blocking everything.");
+                "Inga filer hittades med valda filtyper. " +
+                "Kontrollera att rätt filtyper är aktiverade och att mappfilter inte blockerar allt.");
 
-        progress?.Report($"Done! {results.Count} files from '{usedBranch}'.");
+        progress?.Report($"Klart! {results.Count} filer från '{usedBranch}'.");
         return results.OrderBy(f => f.Path).ToList();
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── Shared helpers ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Downloads the ZIP for a given branch into a byte array.
+    /// Returns null on any HTTP failure (caller decides how to handle).
+    /// </summary>
+    private async Task<byte[]?> DownloadZipAsync(
+        string            repoUrl,
+        string?           accessToken,
+        string            branch,
+        CancellationToken cancellationToken)
+    {
+        bool useApi = !string.IsNullOrWhiteSpace(accessToken);
+        var trimmed = branch.Trim();
+
+        var candidates = string.IsNullOrWhiteSpace(trimmed)
+            ? new[] { "main", "master", "develop" }
+            : new[] { trimmed };
+
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var response = await TryDownloadBranchAsync(
+                repoUrl, accessToken, candidate, useApi, cancellationToken);
+
+            if (response?.IsSuccessStatusCode == true)
+            {
+                using (response)
+                {
+                    var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                    var ms     = new MemoryStream();
+                    await stream.CopyToAsync(ms, cancellationToken);
+                    return ms.ToArray();
+                }
+            }
+            response?.Dispose();
+        }
+        return null;
+    }
+
+    private async Task<HttpResponseMessage?> TryDownloadBranchAsync(
+        string            repoUrl,
+        string?           accessToken,
+        string            candidate,
+        bool              useApi,
+        CancellationToken cancellationToken)
+    {
+        var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
+        using var http    = _httpFactory.CreateClient("github");
+
+        var url = useApi
+            ? $"https://api.github.com/repos/{owner}/{repo}/zipball/{candidate}"
+            : $"https://github.com/{owner}/{repo}/archive/refs/heads/{candidate}.zip";
+
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd("CopyCat-MAUI");
+
+        if (useApi)
+        {
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("token", accessToken);
+            request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        }
+
+        var response = await http.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            response.Dispose();
+            return null;
+        }
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            response.Dispose();
+            throw new InvalidOperationException(
+                "GitHub nekade åtkomst (403 Forbidden). Du kan ha nått gränsen för anonyma anrop. " +
+                "Ange en GitHub-token för att öka gränsen.");
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            response.Dispose();
+            throw new InvalidOperationException(
+                $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'. " +
+                (useApi ? "Kontrollera att token är giltig och har rätt behörigheter."
+                        : "Kontrollera att repot finns och är publikt."));
+        }
+
+        return response;
+    }
+
+    // ── Pattern / folder helpers ───────────────────────────────────────────
 
     private static bool IsInExcludedFolder(string relativePath, HashSet<string> excluded)
     {

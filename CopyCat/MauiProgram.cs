@@ -30,12 +30,13 @@ public static class MauiProgram
         });
 
         // Services
-        builder.Services.AddSingleton<IGitHubService,    GitHubService>();
-        builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
-        builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
-        builder.Services.AddSingleton<IShareService,     MauiShareService>();
-        builder.Services.AddSingleton<IDatabaseService,  DatabaseService>();
-        builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
+        builder.Services.AddSingleton<IGitHubService,         GitHubService>();
+        builder.Services.AddSingleton<IChunkingService,       ChunkingService>();
+        builder.Services.AddSingleton<IClipboardService,      MauiClipboardService>();
+        builder.Services.AddSingleton<IShareService,          MauiShareService>();
+        builder.Services.AddSingleton<IDatabaseService,       DatabaseService>();
+        builder.Services.AddSingleton<ILocalFileService,      LocalFileService>();
+        builder.Services.AddSingleton<IFileTypeDetectorService, FileTypeDetectorService>();
 
         // UI
         builder.Services.AddSingleton<MainViewModel>();
