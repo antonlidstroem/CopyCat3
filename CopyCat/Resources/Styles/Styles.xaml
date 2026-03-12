@@ -7,33 +7,33 @@
     <!-- ══════════════════════════════════════════════════════════════════════
          COLORS — Design System
          ══════════════════════════════════════════════════════════════════════ -->
-
+    
     <!-- App surfaces -->
-    <Color x:Key="BgApp">#0E0E14</Color>
-    <Color x:Key="BgCard">#18181F</Color>
-    <Color x:Key="BgInput">#0B0B10</Color>
-    <Color x:Key="BgStatus">#14141F</Color>
+    <Color x:Key="BgApp">#070F12</Color>
+    <Color x:Key="BgCard">#003B46</Color>
+    <Color x:Key="BgInput">#070F12</Color>
+    <Color x:Key="BgStatus">#070F12</Color>
     <Color x:Key="BgSuccess">#0A1A12</Color>
     <Color x:Key="BgError">#200A0A</Color>
-    <Color x:Key="BgPreview">#0D0D18</Color>
-    <Color x:Key="BgPromptCard">#181826</Color>
-    <Color x:Key="BgPromptEdit">#0F0F1E</Color>
-    <Color x:Key="BgSmartBar">#16161F</Color>
+    <Color x:Key="BgPreview">#070F12</Color>
+    <Color x:Key="BgPromptCard">#070F12</Color>
+    <Color x:Key="BgPromptEdit">#070F12</Color>
+    <Color x:Key="BgSmartBar">#070F12</Color>
 
     <!-- Chip states -->
     <Color x:Key="BgChipOn">#1A2E1A</Color>
-    <Color x:Key="BgChipOff">#13131F</Color>
-    <Color x:Key="BgChipOnFolder">#1A1A2E</Color>
+    <Color x:Key="BgChipOff">#006770</Color>
+    <Color x:Key="BgChipOnFolder">#003B46</Color>
     <Color x:Key="BgChipOnPattern">#2E1A1A</Color>
 
     <!-- Chunk card states -->
-    <Color x:Key="BgChunkDefault">#1A1A2E</Color>
+    <Color x:Key="BgChunkDefault">#070F12</Color>
     <Color x:Key="BgChunkCopied">#1A2E20</Color>
     <Color x:Key="BgChunkSelected">#17213A</Color>
 
     <!-- Selection toolbar -->
-    <Color x:Key="BgSelectionToolbar">#1A2240</Color>
-    <Color x:Key="BorderSelectionToolbar">#5B8EFF</Color>
+    <Color x:Key="BgSelectionToolbar">#070F12</Color>
+    <Color x:Key="BorderSelectionToolbar">#00A3A9</Color>
 
     <!-- Primary accent: amber/gold — complements teal -->
     <Color x:Key="AccentPrimary">#F59E0B</Color>
@@ -42,8 +42,8 @@
     <Color x:Key="AccentPrimaryBorder">#55F59E0B</Color>
 
     <!-- Secondary accent: teal — used for copy/success feedback and auto-detect -->
-    <Color x:Key="AccentSecond">#00D4AA</Color>
-    <Color x:Key="AccentSecondLight">#33FFCC</Color>
+    <Color x:Key="AccentSecond">#008C8B</Color>
+    <Color x:Key="AccentSecondLight">#00A3A9</Color>
     <Color x:Key="AccentSecondBg">#1A00D4AA</Color>
     <Color x:Key="AccentSecondBorder">#4400D4AA</Color>
 
@@ -56,34 +56,34 @@
 
     <!-- Text -->
     <Color x:Key="TextPrimary">#EEEEFF</Color>
-    <Color x:Key="TextSecondary">#9898BB</Color>
-    <Color x:Key="TextMuted">#666690</Color>
-    <Color x:Key="TextDim">#404060</Color>
+    <Color x:Key="TextSecondary">#00A3A9</Color>
+    <Color x:Key="TextMuted">#00A3A9</Color>
+    <Color x:Key="TextDim">#00A3A9</Color>
     <Color x:Key="TextGreen">#2A7048</Color>
     <Color x:Key="TextError">#FF7070</Color>
     <Color x:Key="TextAccent">#FCD34D</Color>
     <Color x:Key="TextOnAccent">#FFFFFF</Color>
-    <Color x:Key="TextCode">#B0C4FF</Color>
-    <Color x:Key="TextCopied">#00D4AA</Color>
+    <Color x:Key="TextCode">#00A3A9</Color>
+    <Color x:Key="TextCopied">#008C8B</Color>
 
     <!-- Borders -->
-    <Color x:Key="BorderDefault">#2D2D4A</Color>
-    <Color x:Key="BorderInput">#3D3D60</Color>
+    <Color x:Key="BorderDefault">#003B46</Color>
+    <Color x:Key="BorderInput">#006770</Color>
     <Color x:Key="BorderSuccess">#3322C55E</Color>
     <Color x:Key="BorderError">#C03030</Color>
     <Color x:Key="BorderChipOn">#22C55E</Color>
-    <Color x:Key="BorderChipOff">#2D2D4A</Color>
+    <Color x:Key="BorderChipOff">#003B46</Color>
     <Color x:Key="BorderChipOnFolder">#F59E0B</Color>
     <Color x:Key="BorderChipOnPattern">#FF7070</Color>
-    <Color x:Key="BorderChunkDefault">#2D2D4A</Color>
-    <Color x:Key="BorderChunkCopied">#00D4AA</Color>
+    <Color x:Key="BorderChunkDefault">#006770</Color>
+    <Color x:Key="BorderChunkCopied">#008C8B</Color>
     <Color x:Key="BorderChunkSelected">#F59E0B</Color>
-    <Color x:Key="BorderPreview">#1E1E35</Color>
-    <Color x:Key="BorderPrompt">#252540</Color>
+    <Color x:Key="BorderPreview">#003B46</Color>
+    <Color x:Key="BorderPrompt">#006770</Color>
 
     <!-- Slider -->
     <Color x:Key="SliderTrackActive">#F59E0B</Color>
-    <Color x:Key="SliderTrackInactive">#2D2D4A</Color>
+    <Color x:Key="SliderTrackInactive">#070F12</Color>
     <Color x:Key="SliderThumb">#FCD34D</Color>
     <Color x:Key="ActivityIndicatorColor">#F59E0B</Color>
 
@@ -484,7 +484,7 @@
     <Style x:Key="SmartActionBarBorder" TargetType="Border">
         <Setter Property="BackgroundColor" Value="{StaticResource BgSmartBar}" />
         <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="Stroke"          Value="{StaticResource BgSmartBar}" />
         <Setter Property="StrokeShape"     Value="RoundRectangle 0" />
         <Setter Property="Padding"         Value="14,10,14,14" />
     </Style>

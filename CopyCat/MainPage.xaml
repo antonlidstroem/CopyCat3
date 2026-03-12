@@ -7,7 +7,7 @@
              x:Class="CopyCat.MainPage"
              x:DataType="vm:MainViewModel"
              x:Name="ThisPage"
-             BackgroundColor="#F59E0B"
+             BackgroundColor="#070F12"
              >
 
     <Grid RowDefinitions="*,Auto">
@@ -26,11 +26,11 @@
                      HEADER CARD
                      ════════════════════════════════════════════════════ -->
 
-                <Image Source="copycat_logo.svg"
+                <!--<Image Source="copycat_logo.svg"
                                HeightRequest="100" 
                                WidthRequest="100"
                                HorizontalOptions="Center" 
-                               VerticalOptions="Center" />
+                               VerticalOptions="Center" />-->
 
 
                 <!-- ════════════════════════════════════════════════════
@@ -1039,7 +1039,7 @@
              ROW 1 — SMART ACTION BAR
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="1" Style="{StaticResource SmartActionBarBorder}"
-                Padding="16,12,16,50">
+                Padding="16,0,16,50">
             <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
 
                 <!-- Busy row -->
@@ -1065,12 +1065,26 @@
                 </Grid>
 
                 <!-- Config mode: primary Chunk button -->
-                <Button Grid.Row="1"
+                <!--<Button Grid.Row="1"
                         Text="⚡"
+                        <Image Source="copycat_logo.svg"
+                               HeightRequest="100" 
+                               WidthRequest="100"
+                               HorizontalOptions="Center" 
+                               VerticalOptions="Center" />
                         Style="{StaticResource PrimaryBtn}"
                         Command="{Binding FetchCommand}"
                         IsVisible="{Binding IsConfigurationMode}"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />-->
+
+                <Button Grid.Row="1"
+                        ImageSource="copycat_logo.svg"
+                        Style="{StaticResource PrimaryBtn}"
+                        HeightRequest="90"
+                        ContentLayout="Top,0" 
+                        Command="{Binding FetchCommand}"
+                        IsVisible="{Binding IsConfigurationMode}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />      
 
                 <!-- Results mode: Reset + Back -->
                 <Grid Grid.Row="1"
