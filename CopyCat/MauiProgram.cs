@@ -30,13 +30,23 @@ public static class MauiProgram
         });
 
         // Services
-        builder.Services.AddSingleton<IGitHubService,         GitHubService>();
-        builder.Services.AddSingleton<IChunkingService,       ChunkingService>();
-        builder.Services.AddSingleton<IClipboardService,      MauiClipboardService>();
-        builder.Services.AddSingleton<IShareService,          MauiShareService>();
-        builder.Services.AddSingleton<IDatabaseService,       DatabaseService>();
-        builder.Services.AddSingleton<ILocalFileService,      LocalFileService>();
-        builder.Services.AddSingleton<IFileTypeDetectorService, FileTypeDetectorService>();
+        builder.Services.AddSingleton<IGitHubService,    GitHubService>();
+        builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
+        builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
+        builder.Services.AddSingleton<IShareService,     MauiShareService>();
+        builder.Services.AddSingleton<IDatabaseService,  DatabaseService>();
+        builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
+
+        // BUG 5 FIX: FileTypeDetectorService (Trees API) was registered here
+        // but never injected into any consumer — MainViewModel uses
+        // IGitHubService.DetectFileTypesInRepoAsync (ZIP-based) instead.
+        // Removed to eliminate the dead singleton allocation and the
+        // confusion it causes when reading the DI setup.
+        //
+        // If you later want to switch auto-detect to the lighter Trees API
+        // approach (one JSON request vs a full ZIP download), inject
+        // IFileTypeDetectorService into MainViewModel and call
+        // DetectExtensionsAsync there instead of DetectFileTypesInRepoAsync.
 
         // UI
         builder.Services.AddSingleton<MainViewModel>();

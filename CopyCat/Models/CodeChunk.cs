@@ -28,14 +28,15 @@ public partial class CodeChunk : ObservableObject
     // ── Card colours: copied (green) > selected (blue) > default ──────────
 
     public Color CardBackgroundColor =>
-        IsCopied   ? Color.FromArgb("#1A2E20") :
-        IsSelected ? Color.FromArgb("#17213A") :
-                     Color.FromArgb("#1A1A2E");
+        IsCopied   ? Color.FromArgb("#00A3A9") :
+        IsSelected ? Color.FromArgb("#F59E0B") :
+                     Color.FromArgb("#008C8B");
 
     public Color CardBorderColor =>
-        IsCopied   ? Color.FromArgb("#22C55E") :
-        IsSelected ? Color.FromArgb("#5B8EFF") :
-                     Color.FromArgb("#2D2D4A");
+        IsCopied   ? Color.FromArgb("#F59E0B") :
+        IsSelected ? Color.FromArgb("#006770") :
+                     Color.FromArgb("#003B46");
+
 
     /// <summary>Share button tint — green when this chunk is the active copied one.</summary>
     public Color CopyButtonTextColor =>

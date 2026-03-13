@@ -66,14 +66,14 @@ public partial class PromptItem : ObservableObject
     // ── Card colours: copied (green) > selected (blue) > default ──────────
 
     public Color CardBackgroundColor =>
-        IsCopied           ? Color.FromArgb("#1A2E20") :
-        IsSelectedForShare ? Color.FromArgb("#17213A") :
-                             Color.FromArgb("#181826");
+        IsCopied           ? Color.FromArgb("#00A3A9") :
+        IsSelectedForShare ? Color.FromArgb("#F59E0B") :
+                             Color.FromArgb("#008C8B");
 
     public Color CardBorderColor =>
-        IsCopied           ? Color.FromArgb("#22C55E") :
-        IsSelectedForShare ? Color.FromArgb("#5B8EFF") :
-                             Color.FromArgb("#252540");
+        IsCopied           ? Color.FromArgb("#F59E0B") :
+        IsSelectedForShare ? Color.FromArgb("#006770") :
+                             Color.FromArgb("#003B46");
 
     // ── Derived ───────────────────────────────────────────────────────────
 

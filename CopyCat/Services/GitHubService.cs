@@ -19,12 +19,6 @@ public class GitHubService : IGitHubService
     // names from the ZipArchive (central directory only — no content read),
     // counts extensions, and returns a dictionary sorted by frequency.
     //
-    // Why not use the GitHub Languages API?
-    // The Languages API counts against the 60 req/hour unauthenticated limit.
-    // This zip download uses github.com/archive (not api.github.com) and does
-    // NOT count against API rate limits.  It is the exact same download we
-    // already perform during a full chunk run.
-    //
     // Extensions with fewer than 2 occurrences are excluded to avoid noise
     // from stray files (e.g. a single .sh script in a C# repo).
 
@@ -46,20 +40,17 @@ public class GitHubService : IGitHubService
 
             foreach (var entry in archive.Entries)
             {
-                // Skip directories and root-level manifest entries
                 if (entry.FullName.EndsWith('/'))     continue;
                 if (string.IsNullOrEmpty(entry.Name)) continue;
 
                 var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
                 if (string.IsNullOrEmpty(ext)) continue;
 
-                // Skip binary / non-code extensions to keep the result clean
                 if (_binaryExtensions.Contains(ext)) continue;
 
                 counts[ext] = counts.GetValueOrDefault(ext, 0) + 1;
             }
 
-            // Return sorted by count descending, filtering noise (< 2 files)
             return counts
                 .Where(kv => kv.Value >= 2)
                 .OrderByDescending(kv => kv.Value)
@@ -69,8 +60,8 @@ public class GitHubService : IGitHubService
         catch { return new Dictionary<string, int>(); }
     }
 
-    // Binary / asset extensions we never want to suggest as "include" types
-    private static readonly HashSet<string> _binaryExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _binaryExtensions =
+        new(StringComparer.OrdinalIgnoreCase)
     {
         ".png",".jpg",".jpeg",".gif",".ico",".svg",".webp",".bmp",".tiff",
         ".mp3",".mp4",".wav",".ogg",".mov",".avi",
@@ -103,7 +94,36 @@ public class GitHubService : IGitHubService
                     new AuthenticationHeaderValue("token", accessToken);
 
             var response = await http.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode) return [];
+
+            // ── BUG 4 FIX: distinguish auth failures from "repo not found" ──
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                response.Dispose();
+                throw new InvalidOperationException(
+                    "Token ogiltigt eller utgånget (401). " +
+                    "Rensa token-fältet och ange ett nytt token från " +
+                    "GitHub → Settings → Developer settings → Fine-grained tokens.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                response.Dispose();
+                throw new InvalidOperationException(
+                    "GitHub nekade åtkomst (403). " +
+                    "Kontrollera att token har behörigheten Contents: Read-only " +
+                    "och att det gäller detta specifika repo.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var hint = string.IsNullOrWhiteSpace(accessToken)
+                    ? " Om detta är ett privat repo, lägg till ett GitHub-token."
+                    : " Kontrollera att token ger åtkomst till detta repo.";
+                response.Dispose();
+                throw new InvalidOperationException(
+                    $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'." + hint);
+            }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             using var doc = JsonDocument.Parse(json);
@@ -116,6 +136,9 @@ public class GitHubService : IGitHubService
                 .ToList();
         }
         catch (OperationCanceledException) { throw; }
+        // Re-throw the InvalidOperationExceptions we threw above so callers
+        // can surface them as user-readable messages.
+        catch (InvalidOperationException)  { throw; }
         catch { return []; }
     }
 
@@ -136,7 +159,7 @@ public class GitHubService : IGitHubService
         var patternList       = excludedFilePatterns.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
         bool useApi           = !string.IsNullOrWhiteSpace(accessToken);
 
-        progress?.Report($"Ansluter till repo…");
+        progress?.Report("Ansluter till repo…");
 
         var trimmedBranch = branch.Trim();
         var candidates = string.IsNullOrWhiteSpace(trimmedBranch)
@@ -171,12 +194,18 @@ public class GitHubService : IGitHubService
             catch (InvalidOperationException)  { throw; }
         }
 
+        // ── BUG 1 FIX: include token hint when the repo is not found ───────
+
         if (successResponse is null)
         {
             var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
+            var tokenHint = string.IsNullOrWhiteSpace(accessToken)
+                ? " Om detta är ett privat repo, lägg till ett GitHub-token i fältet ovan."
+                : " Kontrollera att token har behörigheten Contents: Read-only och att det gäller detta repo.";
             throw new InvalidOperationException(
                 $"Repo '{owner}/{repo}' hittades inte på någon gren " +
-                $"(provade: {string.Join(", ", candidates)}). Kontrollera URL och gren.");
+                $"(provade: {string.Join(", ", candidates)}). " +
+                $"Kontrollera URL och gren.{tokenHint}");
         }
 
         if (!string.IsNullOrWhiteSpace(trimmedBranch) &&
@@ -241,7 +270,10 @@ public class GitHubService : IGitHubService
 
     /// <summary>
     /// Downloads the ZIP for a given branch into a byte array.
-    /// Returns null on any HTTP failure (caller decides how to handle).
+    ///
+    /// BUG 3 FIX: Now uses the same multi-branch fallback logic as
+    /// FetchFilesAsync so that auto-detect succeeds even when the branch
+    /// field contains a non-default value that doesn't exist in the repo.
     /// </summary>
     private async Task<byte[]?> DownloadZipAsync(
         string            repoUrl,
@@ -249,12 +281,16 @@ public class GitHubService : IGitHubService
         string            branch,
         CancellationToken cancellationToken)
     {
-        bool useApi = !string.IsNullOrWhiteSpace(accessToken);
-        var trimmed = branch.Trim();
+        bool useApi  = !string.IsNullOrWhiteSpace(accessToken);
+        var  trimmed = branch.Trim();
 
+        // ── BUG 3 FIX: mirror the same fallback chain as FetchFilesAsync ───
         var candidates = string.IsNullOrWhiteSpace(trimmed)
             ? new[] { "main", "master", "develop" }
-            : new[] { trimmed };
+            : new[] { trimmed }
+              .Concat(new[] { "main", "master", "develop" }
+                  .Where(b => !b.Equals(trimmed, StringComparison.OrdinalIgnoreCase)))
+              .ToArray();
 
         foreach (var candidate in candidates)
         {
@@ -278,6 +314,14 @@ public class GitHubService : IGitHubService
         return null;
     }
 
+    /// <summary>
+    /// Attempts to download the ZIP for one specific branch.
+    ///
+    /// BUG 2 FIX: 401 Unauthorized is now handled explicitly with an
+    /// actionable error message instead of falling through to the generic
+    /// status-code block. This surfaces immediately when a token is wrong
+    /// or expired rather than producing a confusing "repo not found" message.
+    /// </summary>
     private async Task<HttpResponseMessage?> TryDownloadBranchAsync(
         string            repoUrl,
         string?           accessToken,
@@ -305,25 +349,43 @@ public class GitHubService : IGitHubService
         var response = await http.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
+        // 404 → branch simply doesn't exist; caller tries the next candidate.
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             response.Dispose();
             return null;
         }
+
+        // ── BUG 2 FIX: explicit 401 handler ───────────────────────────────
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            response.Dispose();
+            throw new InvalidOperationException(
+                "GitHub nekade åtkomst (401 Unauthorized). " +
+                "Token är ogiltigt eller har löpt ut. " +
+                "Gå till GitHub → Settings → Developer settings → " +
+                "Fine-grained tokens och generera ett nytt token, " +
+                "tryck sedan 🗑 i CopyCat för att rensa det gamla.");
+        }
+
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
             response.Dispose();
             throw new InvalidOperationException(
-                "GitHub nekade åtkomst (403 Forbidden). Du kan ha nått gränsen för anonyma anrop. " +
-                "Ange en GitHub-token för att öka gränsen.");
+                "GitHub nekade åtkomst (403 Forbidden). " +
+                "Du kan ha nått gränsen för anonyma anrop, eller " +
+                "token saknar behörigheten Contents: Read-only för detta repo. " +
+                "Ange eller uppdatera ditt GitHub-token.");
         }
+
         if (!response.IsSuccessStatusCode)
         {
             response.Dispose();
             throw new InvalidOperationException(
                 $"GitHub svarade {(int)response.StatusCode} för '{owner}/{repo}'. " +
-                (useApi ? "Kontrollera att token är giltig och har rätt behörigheter."
-                        : "Kontrollera att repot finns och är publikt."));
+                (useApi
+                    ? "Kontrollera att token är giltigt och har rätt behörigheter."
+                    : "Kontrollera att repot finns och är publikt."));
         }
 
         return response;

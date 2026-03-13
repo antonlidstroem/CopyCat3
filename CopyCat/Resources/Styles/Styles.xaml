@@ -13,7 +13,7 @@
     <Color x:Key="BgCard">#003B46</Color>
     <Color x:Key="BgInput">#070F12</Color>
     <Color x:Key="BgStatus">#070F12</Color>
-    <Color x:Key="BgSuccess">#0A1A12</Color>
+    <Color x:Key="BgSuccess">#003B46</Color>
     <Color x:Key="BgError">#200A0A</Color>
     <Color x:Key="BgPreview">#070F12</Color>
     <Color x:Key="BgPromptCard">#070F12</Color>
@@ -21,7 +21,7 @@
     <Color x:Key="BgSmartBar">#070F12</Color>
 
     <!-- Chip states -->
-    <Color x:Key="BgChipOn">#1A2E1A</Color>
+    <Color x:Key="BgChipOn">#F59E0B</Color>
     <Color x:Key="BgChipOff">#006770</Color>
     <Color x:Key="BgChipOnFolder">#003B46</Color>
     <Color x:Key="BgChipOnPattern">#2E1A1A</Color>
@@ -48,9 +48,9 @@
     <Color x:Key="AccentSecondBorder">#4400D4AA</Color>
 
     <!-- Legacy green kept for StatNumber and SummaryBorder (success state) -->
-    <Color x:Key="AccentGreen">#22C55E</Color>
-    <Color x:Key="AccentGreenBg">#3322C55E</Color>
-    <Color x:Key="AccentGreenBorder">#3322C55E</Color>
+    <Color x:Key="AccentGreen">#008C8B</Color>
+    <Color x:Key="AccentGreenBg">#008C8B</Color>
+    <Color x:Key="AccentGreenBorder">#008C8B</Color>
 
     <Color x:Key="AccentRed">#FF7070</Color>
 
@@ -59,7 +59,7 @@
     <Color x:Key="TextSecondary">#00A3A9</Color>
     <Color x:Key="TextMuted">#00A3A9</Color>
     <Color x:Key="TextDim">#00A3A9</Color>
-    <Color x:Key="TextGreen">#2A7048</Color>
+    <Color x:Key="TextGreen">#008C8B</Color>
     <Color x:Key="TextError">#FF7070</Color>
     <Color x:Key="TextAccent">#FCD34D</Color>
     <Color x:Key="TextOnAccent">#FFFFFF</Color>
@@ -69,9 +69,9 @@
     <!-- Borders -->
     <Color x:Key="BorderDefault">#003B46</Color>
     <Color x:Key="BorderInput">#006770</Color>
-    <Color x:Key="BorderSuccess">#3322C55E</Color>
+    <Color x:Key="BorderSuccess">#33008C8B</Color>
     <Color x:Key="BorderError">#C03030</Color>
-    <Color x:Key="BorderChipOn">#22C55E</Color>
+    <Color x:Key="BorderChipOn">#008C8B</Color>
     <Color x:Key="BorderChipOff">#003B46</Color>
     <Color x:Key="BorderChipOnFolder">#F59E0B</Color>
     <Color x:Key="BorderChipOnPattern">#FF7070</Color>
@@ -341,7 +341,7 @@
 
     <Style x:Key="SmallIconBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="Transparent" />
-        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="TextColor"            Value="{StaticResource BgCard}" />
         <Setter Property="FontSize"             Value="13" />
         <Setter Property="Padding"              Value="6,0" />
         <Setter Property="MinimumHeightRequest" Value="40" />
@@ -658,7 +658,7 @@
     </Style>
 
     <Style x:Key="PromptTitleLabel" TargetType="Label">
-        <Setter Property="TextColor"      Value="{StaticResource AccentPrimaryLight}" />
+        <Setter Property="TextColor"      Value="{StaticResource BgCard }" />
         <Setter Property="FontSize"       Value="14" />
         <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="FontFamily"     Value="OpenSansSemibold" />

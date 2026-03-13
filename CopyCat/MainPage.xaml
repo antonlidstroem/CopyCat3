@@ -98,19 +98,20 @@
 
                             <!-- Saved repos list -->
                             <VerticalStackLayout IsVisible="{Binding HasSavedRepos}"
-                                                 Spacing="0" Margin="0,0,0,6">
+                                                 Spacing="0" Margin="0,0,0,0">
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,6">
-                                    <Label Grid.Column="0"
+                                    <!--<Label Grid.Column="0"
                                            Text="Recent repositories"
                                            Style="{StaticResource FieldLabel}"
-                                           Margin="0" VerticalOptions="Center" />
+                                           Margin="0" VerticalOptions="Center" />-->
                                     <Button Grid.Column="1"
                                             Style="{StaticResource SmallIconBtn}"
                                             Text="✎  Rename"
                                             Command="{Binding RenameSelectedRepoCommand}"
                                             IsVisible="{Binding HasSelectedRepo}"
                                             ToolTipProperties.Text="Rename selected repository"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            />
                                     <Button Grid.Column="2"
                                             Style="{StaticResource SmallIconBtn}"
                                             Text="✕"
@@ -119,7 +120,7 @@
                                             ToolTipProperties.Text="Deselect repository"
                                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                                 </Grid>
-                                <Border Style="{StaticResource SavedReposListBorder}">
+                                <!--<Border Style="{StaticResource SavedReposListBorder}">
                                     <CollectionView ItemsSource="{Binding SavedRepos}"
                                                     SelectionMode="None"
                                                     MaximumHeightRequest="220">
@@ -146,7 +147,7 @@
                                             </DataTemplate>
                                         </CollectionView.ItemTemplate>
                                     </CollectionView>
-                                </Border>
+                                </Border>-->
                             </VerticalStackLayout>
 
                             <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Margin="0,4,0,10" />
@@ -758,8 +759,8 @@
                                                                              VerticalOptions="Center">
                                                             <Label Text="{Binding Title}"
                                                                    Style="{StaticResource PromptTitleLabel}" />
-                                                            <Label Text="{Binding PreviewText}"
-                                                                   Style="{StaticResource PromptPreviewLabel2}" />
+                                                            <!--<Label Text="{Binding PreviewText}"
+                                                                   Style="{StaticResource PromptPreviewLabel2}" />-->
                                                             <VerticalStackLayout.GestureRecognizers>
                                                                 <TapGestureRecognizer
                                                                     Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SelectPromptForShareCommand}"
@@ -1002,7 +1003,7 @@
 
                                                     <!-- File preview toggle -->
                                                     <Button Text="{Binding PreviewToggleIcon}"
-                                                            Style="{StaticResource ChunkActionBtn}"
+                                                            Style="{StaticResource SmallIconBtn}"
                                                             Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePreviewCommand}"
                                                             CommandParameter="{Binding .}"
                                                             ToolTipProperties.Text="Show or hide the list of files in this chunk" />
