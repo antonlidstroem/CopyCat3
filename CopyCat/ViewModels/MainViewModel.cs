@@ -183,10 +183,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public Color SliderWarningColor => (int)MaxTokensPerChunk switch
     {
-        < 2000             => Color.FromArgb("#FF7070"),
-        >= 4097 and < 8193 => Color.FromArgb("#22C55E"),
-        >= 25001           => Color.FromArgb("#FF7070"),
-        _                  => Color.FromArgb("#A0A0C0"),
+        < 2000 => Color.FromArgb("#FF7070"), // Red
+        >= 4097 and < 8193 => Color.FromArgb("#008C8B"), // Teal (Success)
+        >= 25001 => Color.FromArgb("#FF7070"), // Red
+        _ => Color.FromArgb("#00A3A9"), // Cyan (Default info)
     };
 
     [ObservableProperty]
