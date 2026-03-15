@@ -248,53 +248,7 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- ── KEYWORD FILTER (collapsible) ── -->
-                    <Border Style="{StaticResource Card}">
-                        <VerticalStackLayout Spacing="0">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <Label Grid.Column="0" Text="KEYWORD FILTER"
-                                       Style="{StaticResource SectionTitle}"
-                                       Margin="0" VerticalOptions="Center" />
-                                <Label Grid.Column="1"
-                                       Text="ⓘ"
-                                       TextColor="{StaticResource AccentPrimary}"
-                                       FontSize="16" VerticalOptions="Center" Margin="0,0,4,0"
-                                       ToolTipProperties.Text="Only files whose content contains this exact term are included. Case-insensitive. Useful for isolating files related to a specific class or feature." />
-                                <Label Grid.Column="2"
-                                       Text="{Binding IsKeywordExpanded, Converter={StaticResource ExpandArrowConv}}"
-                                       TextColor="{StaticResource TextMuted}" FontSize="12"
-                                       VerticalOptions="Center">
-                                    <Label.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding ToggleKeywordCommand}" />
-                                    </Label.GestureRecognizers>
-                                </Label>
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding ToggleKeywordCommand}" />
-                                </Grid.GestureRecognizers>
-                            </Grid>
-
-                            <VerticalStackLayout IsVisible="{Binding IsKeywordExpanded}" Spacing="0">
-                                <Label Text="Only files whose content contains this term will be included. Leave empty to include all files."
-                                       Style="{StaticResource HintLabel}" />
-                                <Border Style="{StaticResource InputBorder}">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <Entry Grid.Column="0"
-                                               Style="{StaticResource InputEntry}"
-                                               Text="{Binding KeywordFilter}"
-                                               Placeholder="e.g. OrderService, IRepository…"
-                                               ReturnType="Done"
-                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
-                                        <Button Grid.Column="1"
-                                                Style="{StaticResource IconBtn}"
-                                                Text="✕"
-                                                Command="{Binding ClearKeywordFilterCommand}"
-                                                ToolTipProperties.Text="Clear keyword"
-                                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
-                                    </Grid>
-                                </Border>
-                            </VerticalStackLayout>
-                        </VerticalStackLayout>
-                    </Border>
+                  
 
                     <!-- ── FILE TYPES ── -->
                     <Border Style="{StaticResource Card}">
@@ -411,6 +365,54 @@
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ── KEYWORD FILTER (collapsible) ── -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="0">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <Label Grid.Column="0" Text="KEYWORD FILTER"
+                     Style="{StaticResource SectionTitle}"
+                     Margin="0" VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                     Text="ⓘ"
+                     TextColor="{StaticResource AccentPrimary}"
+                     FontSize="16" VerticalOptions="Center" Margin="0,0,4,0"
+                     ToolTipProperties.Text="Only files whose content contains this exact term are included. Case-insensitive. Useful for isolating files related to a specific class or feature." />
+                                <Label Grid.Column="2"
+                     Text="{Binding IsKeywordExpanded, Converter={StaticResource ExpandArrowConv}}"
+                     TextColor="{StaticResource TextMuted}" FontSize="12"
+                     VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ToggleKeywordCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding ToggleKeywordCommand}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+
+                            <VerticalStackLayout IsVisible="{Binding IsKeywordExpanded}" Spacing="0">
+                                <Label Text="Only files whose content contains this term will be included. Leave empty to include all files."
+                     Style="{StaticResource HintLabel}" />
+                                <Border Style="{StaticResource InputBorder}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Entry Grid.Column="0"
+                             Style="{StaticResource InputEntry}"
+                             Text="{Binding KeywordFilter}"
+                             Placeholder="e.g. OrderService, IRepository…"
+                             ReturnType="Done"
+                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                        <Button Grid.Column="1"
+                              Style="{StaticResource IconBtn}"
+                              Text="✕"
+                              Command="{Binding ClearKeywordFilterCommand}"
+                              ToolTipProperties.Text="Clear keyword"
+                              IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                    </Grid>
+                                </Border>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -906,7 +908,7 @@
                                    VerticalOptions="Center" />
                         </Grid>
 
-                        <!-- Multi-select toolbar -->
+                        <!-- Multi-select toolbar --><!--
                         <Border Style="{StaticResource SelectionToolbarBorder}"
                                 IsVisible="{Binding HasSelection}">
                             <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
@@ -932,7 +934,7 @@
                                         Command="{Binding ShareSelectedCommand}"
                                         ToolTipProperties.Text="Share all selected chunks via the system share sheet" />
                             </Grid>
-                        </Border>
+                        </Border>-->
 
                         <!-- CHUNK CARDS -->
                         <CollectionView ItemsSource="{Binding Chunks}" SelectionMode="None">
@@ -987,7 +989,8 @@
                                                     </Border>
 
                                                     <!-- Copy to clipboard -->
-                                                    <Button Text="📋"
+                                                    <Button Text="Copy"
+                                                            MinimumWidthRequest="40"
                                                             Style="{StaticResource ChunkActionBtn}"
                                                             Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
                                                             CommandParameter="{Binding .}"
@@ -1102,7 +1105,36 @@
                             Command="{Binding BackToConfigurationCommand}"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                 </Grid>
-                
+
+
+                <!-- Multi-select toolbar -->
+                <Border Style="{StaticResource SelectionToolbarBorder}"
+                  IsVisible="{Binding HasSelection}">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="1">
+                                    <Label Text="{Binding ShareSelectedLabel}"
+                             Style="{StaticResource SelectionCountLabel}" />
+                                    <Label Text="{Binding SelectedTokensLabel}"
+                             Style="{StaticResource SelectionTokensLabel}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1"
+                          Text="✕"
+                          Style="{StaticResource IconBtn}"
+                          Command="{Binding ClearSelectionCommand}"
+                          ToolTipProperties.Text="Deselect all" />
+                                <Button Grid.Column="2"
+                          Text="📋 Copy"
+                          Style="{StaticResource CopySelectedBtn}"
+                          Command="{Binding CopySelectedCommand}"
+                          ToolTipProperties.Text="Copy all selected chunks to clipboard" />
+                                <Button Grid.Column="3"
+                          Text="↗ Share"
+                          Style="{StaticResource ShareBtn}"
+                          Command="{Binding ShareSelectedCommand}"
+                          ToolTipProperties.Text="Share all selected chunks via the system share sheet" />
+                    </Grid>
+                </Border>
+
 
             </Grid>
         </Border>
