@@ -869,6 +869,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void BackToConfiguration()
     {
+        ClearSelection();
         IsResultsMode = false;
         OnPropertyChanged(nameof(IsConfigurationMode));
     }
@@ -1223,6 +1224,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Reset()
     {
+        ClearSelection();
         UnsubscribeAllChunks(); Chunks.Clear();
         ChunkCount = CopiedCount = SelectedCount =
             TotalFiles = TotalTokens = TotalProjects = 0;
