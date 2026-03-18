@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text;
+using System.Text.Json;
 
 namespace CopyCat.ViewModels;
 
@@ -22,8 +23,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _cts;
     private bool                     _initialized;
     private bool                     _disposed;
-
-    // Debounce timer for branch-change auto-detect (Fix 2)
     private CancellationTokenSource? _autoDetectDebounce;
 
     // ── Event-handler lists for explicit unsubscription ────────────────────
@@ -38,13 +37,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public event EventHandler?                         TokenInfoRequested;
     public event EventHandler<SavedRepo>?              RepoRenameRequested;
     public event EventHandler<List<Models.SavedRepo>>? ShowHistoryRequested;
+    public event EventHandler<string>?                 ShowInfoRequested;
+
+    // ── C1: Language → extension inference map ─────────────────────────────
 
     /// <summary>
-    /// Generic info dialog — raised by ShowInfoCommand with the full tooltip
-    /// text as a parameter. Wired to DisplayAlert in MainPage.xaml.cs.
-    /// Cross-platform fallback since ToolTipProperties clips on some targets.
+    /// Maps GitHub Languages API display names to file extensions understood by FileTypeFilters.
+    /// Used by AutoDetectFileTypesAsync to infer project-file extensions (.csproj etc.)
+    /// that the ZIP scan never returns because GitHub does not classify them as languages.
     /// </summary>
-    public event EventHandler<string>? ShowInfoRequested;
+    private static readonly IReadOnlyDictionary<string, string[]> LanguageExtensionInference =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["C#"]         = [".csproj", ".xml"],
+            ["TypeScript"] = [".json"],
+            ["JavaScript"] = [".json"],
+            ["Python"]     = [],   // no required companion extensions
+            ["Java"]       = [],
+            ["Kotlin"]     = [],
+        };
 
     // ── Observable properties ──────────────────────────────────────────────
 
@@ -67,16 +78,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(CompactSummaryText))]
     private string _branch = "main";
 
-    /// <summary>
-    /// Fix 2: When the branch changes on a GitHub URL, fire auto-detect
-    /// automatically after a 400 ms debounce so rapid changes (e.g. typing)
-    /// don't spam the API. Only fires when all guards pass.
-    /// </summary>
     partial void OnBranchChanged(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
-        if (!RepoUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase)) return;
         if (IsBusy || IsAutoDetecting) return;
+        // C1: fire auto-detect for both GitHub and local paths
+        if (string.IsNullOrWhiteSpace(RepoUrl)) return;
 
         _autoDetectDebounce?.Cancel();
         _autoDetectDebounce = new CancellationTokenSource();
@@ -99,38 +106,57 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isKeywordExpanded;
     [ObservableProperty] private bool _isFetchingBranches;
 
+    // C4: file browser toggle
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FetchedFilesCountLabel))]
+    private bool _isFetchedFilesExpanded;
+
     [ObservableProperty] private string _keywordFilter      = string.Empty;
     [ObservableProperty] private string _customFolderInput  = string.Empty;
     [ObservableProperty] private string _customPatternInput = string.Empty;
 
-    // ── In-results search filter (Phase 2: P3) ─────────────────────────────
+    // ── C5: FilteredChunks — ObservableCollection (fixes IEnumerable binding) ──
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FilteredChunks))]
-    [NotifyPropertyChangedFor(nameof(HasFilteredChunks))]
-    [NotifyPropertyChangedFor(nameof(ChunkSearchSummary))]
-    private string _chunkSearchText = string.Empty;
+    private readonly ObservableCollection<CodeChunk> _filteredChunks = [];
 
-    /// <summary>Chunks filtered by the in-results search bar.</summary>
-    public IEnumerable<CodeChunk> FilteredChunks =>
-        string.IsNullOrWhiteSpace(ChunkSearchText)
-            ? Chunks
-            : Chunks.Where(c =>
-                c.DisplayLabel.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase) ||
-                c.Content.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// C5 fix: ObservableCollection so CollectionView receives change notifications
+    /// and animates item add/remove. Rebuilt by RefreshFilteredChunks() whenever
+    /// Chunks or ChunkSearchText changes.
+    /// </summary>
+    public ObservableCollection<CodeChunk> FilteredChunks => _filteredChunks;
 
-    public bool HasFilteredChunks => FilteredChunks.Any();
+    public bool HasFilteredChunks => _filteredChunks.Count > 0;
 
     public string ChunkSearchSummary
     {
         get
         {
             if (string.IsNullOrWhiteSpace(ChunkSearchText)) return string.Empty;
-            var count = FilteredChunks.Count();
-            return count == 0
+            return _filteredChunks.Count == 0
                 ? "No chunks match"
-                : $"{count} of {Chunks.Count} chunk{(Chunks.Count == 1 ? "" : "s")} match";
+                : $"{_filteredChunks.Count} of {Chunks.Count} chunk{(Chunks.Count == 1 ? "" : "s")} match";
         }
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChunkSearchSummary))]
+    [NotifyPropertyChangedFor(nameof(HasFilteredChunks))]
+    private string _chunkSearchText = string.Empty;
+
+    partial void OnChunkSearchTextChanged(string _) => RefreshFilteredChunks();
+
+    private void RefreshFilteredChunks()
+    {
+        _filteredChunks.Clear();
+        var src = string.IsNullOrWhiteSpace(ChunkSearchText)
+            ? (IEnumerable<CodeChunk>)Chunks
+            : Chunks.Where(c =>
+                c.DisplayLabel.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase) ||
+                c.Content.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase));
+        foreach (var c in src) _filteredChunks.Add(c);
+        OnPropertyChanged(nameof(HasFilteredChunks));
+        OnPropertyChanged(nameof(ChunkSearchSummary));
     }
 
     // ── Auto-detect state ──────────────────────────────────────────────────
@@ -145,13 +171,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public bool HasAutoDetectStatus => !string.IsNullOrEmpty(AutoDetectStatusText);
 
     /// <summary>
-    /// Bug 7 fix: CanAutoDetect now checks for github.com in the URL
-    /// so the button does not appear for local paths.
+    /// C1 fix: Auto button now appears for both GitHub URLs and local paths.
+    /// The detection method is chosen inside AutoDetectFileTypesAsync.
     /// </summary>
     public bool CanAutoDetect =>
-        !IsBusy &&
-        !string.IsNullOrWhiteSpace(RepoUrl) &&
-        RepoUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase);
+        !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl);
 
     // ── Collapsed filter summaries ─────────────────────────────────────────
 
@@ -175,7 +199,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             var excluded = FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name).ToList();
             var included = FolderFilters.Where(f => !f.IsExcluded).Select(f => f.Name).ToList();
-            var parts    = new List<string>();
+            var parts = new List<string>();
             if (excluded.Count > 0) parts.Add($"Excluded: {string.Join(", ", excluded)}");
             if (included.Count > 0) parts.Add($"Included: {string.Join(", ", included)}");
             return parts.Count == 0 ? "no folders configured" : string.Join("  ·  ", parts);
@@ -191,6 +215,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ── C4: Fetched file browser ───────────────────────────────────────────
+
+    public string FetchedFilesCountLabel =>
+        $"FETCHED FILES ({FetchedFiles.Count})";
+
+    public bool HasFetchedFiles => FetchedFiles.Count > 0;
+
     // ── App state ──────────────────────────────────────────────────────────
 
     [ObservableProperty]
@@ -198,13 +229,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(IsResultsAndNoSelection))]
     private bool _isResultsMode;
 
-    public bool IsConfigurationMode => !IsResultsMode;
-
-    /// <summary>
-    /// Bug 5 fix: NotifyPropertyChangedFor is wired to both _isResultsMode
-    /// and _selectedCount, guaranteeing the smart-bar layout updates on
-    /// back-navigation AND on selection changes.
-    /// </summary>
+    public bool IsConfigurationMode    => !IsResultsMode;
     public bool IsResultsAndNoSelection => IsResultsMode && !HasSelection;
 
     public string CompactSummaryText
@@ -241,17 +266,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         < 2000  => "⚠️ Very few tokens — many chunks. Use multi-select to combine before sharing.",
         < 4097  => "ℹ️ Fits GPT-3.5 (4K context) and most basic AI chat interfaces.",
         < 8193  => "✅ Good balance — works with GPT-4, Claude and Gemini.",
-        < 16001 => "ℹ️ Above GPT-3.5 limit. Compatible with GPT-4 Turbo, Claude 3+ and Gemini 1.5.",
-        < 25001 => "⚠️ Large chunks — some AI interfaces may reject this size. Prefer share sheet.",
-        _       => "🚨 Very large chunks — use the share sheet instead of clipboard for best results."
+        < 16001 => "ℹ️ Compatible with GPT-4 Turbo, Claude 3+ and Gemini 1.5.",
+        < 25001 => "⚠️ Large chunks — some AI interfaces may reject this size.",
+        _       => "🚨 Very large chunks — use the share sheet for best results."
     };
 
     public Color SliderWarningColor => (int)MaxTokensPerChunk switch
     {
-        < 2000   => Color.FromArgb("#EF4444"),
-        < 8193   => Color.FromArgb("#00B4BC"),
-        < 25001  => Color.FromArgb("#F59E0B"),
-        _        => Color.FromArgb("#EF4444"),
+        < 2000  => Color.FromArgb("#EF4444"),
+        < 8193  => Color.FromArgb("#00B4BC"),
+        < 25001 => Color.FromArgb("#F59E0B"),
+        _       => Color.FromArgb("#EF4444"),
     };
 
     [ObservableProperty]
@@ -271,14 +296,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int    _copiedCount;
 
     partial void OnTotalFilesChanged(int _)  => OnPropertyChanged(nameof(FileTypeCardSummary));
-    partial void OnCopiedCountChanged(int _) => OnPropertyChanged(nameof(CopyProgressLabel));
+    partial void OnCopiedCountChanged(int _)
+    {
+        OnPropertyChanged(nameof(CopyProgressLabel));
+        OnPropertyChanged(nameof(HasCopyProgress));
+    }
 
-    // ── Phase 2: Copy progress counter (P1) ───────────────────────────────
-
-    /// <summary>
-    /// Human-readable copy progress shown in the smart bar.
-    /// e.g. "Chunk 3 of 12 copied" or "All 12 chunks copied ✓"
-    /// </summary>
     public string CopyProgressLabel
     {
         get
@@ -292,7 +315,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasCopyProgress => !string.IsNullOrEmpty(CopyProgressLabel);
 
-    // ── Multi-select ───────────────────────────────────────────────────────
+    // ── C3: Multi-select token warnings ───────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
@@ -300,6 +323,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(SelectedTokensLabel))]
     [NotifyPropertyChangedFor(nameof(SelectAllChunksLabel))]
     [NotifyPropertyChangedFor(nameof(IsResultsAndNoSelection))]
+    [NotifyPropertyChangedFor(nameof(SelectionWarningLabel))]
+    [NotifyPropertyChangedFor(nameof(SelectionWarningColor))]
+    [NotifyPropertyChangedFor(nameof(HasSelectionWarning))]
     [NotifyCanExecuteChangedFor(nameof(ShareSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopySelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ClearSelectionCommand))]
@@ -321,13 +347,50 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Phase 2 (P4): True when 2+ chunks are selected, enabling merge.</summary>
+    /// <summary>
+    /// C3: Context-aware warning based on real AI context window limits.
+    /// Shown in the selection toolbar below SelectedTokensLabel.
+    /// </summary>
+    public string SelectionWarningLabel
+    {
+        get
+        {
+            var total = Chunks.Where(c => c.IsSelected).Sum(c => c.EstimatedTokens);
+            return total switch
+            {
+                > 200_000 => "⛔ Exceeds Gemini 1.5 Pro share limit (~200K tokens)",
+                > 128_000 => "⚠️ May exceed Claude.ai context window (128K tokens)",
+                >  32_000 => "⚠️ Too large for GPT-3.5 — use GPT-4 Turbo, Claude, or Gemini",
+                >  16_000 => "ℹ️ Above GPT-3.5 limit — works with GPT-4 Turbo, Claude 3+, Gemini 1.5",
+                >       0 => "✅ Fits all major AI interfaces",
+                _         => string.Empty,
+            };
+        }
+    }
+
+    public Color SelectionWarningColor
+    {
+        get
+        {
+            var total = Chunks.Where(c => c.IsSelected).Sum(c => c.EstimatedTokens);
+            return total switch
+            {
+                > 128_000 => Color.FromArgb("#EF4444"),
+                >  32_000 => Color.FromArgb("#F59E0B"),
+                _         => Color.FromArgb("#00B4BC"),
+            };
+        }
+    }
+
+    public bool HasSelectionWarning => !string.IsNullOrEmpty(SelectionWarningLabel);
+
     public bool CanMerge => SelectedCount >= 2;
 
     // ── Saved repos ────────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedRepo))]
+    [NotifyPropertyChangedFor(nameof(HasWorkspaceSaved))]
     private SavedRepo? _selectedSavedRepo;
 
     partial void OnSelectedSavedRepoChanged(SavedRepo? value)
@@ -336,12 +399,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RepoUrl = value.Url;
         Branch  = value.Branch;
         if (value.HasToken) FireAndForget(LoadTokenForRepoAsync(value));
+
+        // C6: restore workspace snapshot
+        FireAndForget(RestoreWorkspaceAsync(value));
     }
 
     public bool HasSavedRepos   => SavedRepos.Count > 0;
     public bool HasSelectedRepo => SelectedSavedRepo is not null;
 
-    // ── Prompt selection for share ─────────────────────────────────────────
+    /// <summary>C6: True when the selected repo has a saved workspace snapshot.</summary>
+    public bool HasWorkspaceSaved => SelectedSavedRepo?.HasWorkspace ?? false;
+
+    // ── Prompt selection ───────────────────────────────────────────────────
 
     public PromptItem? SelectedPrompt => Prompts.FirstOrDefault(p => p.IsSelectedForShare);
 
@@ -354,6 +423,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string>            BranchOptions      { get; } = [];
     public ObservableCollection<SavedRepo>         SavedRepos         { get; } = [];
     public ObservableCollection<PromptItem>        Prompts            { get; } = [];
+
+    /// <summary>C4: All files returned by the last fetch, for the file browser panel.</summary>
+    public ObservableCollection<FetchedFileEntry>  FetchedFiles       { get; } = [];
 
     public bool HasBranchOptions => BranchOptions.Count > 0;
 
@@ -382,18 +454,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         SavedRepos.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSavedRepos));
 
-        // Keep FilteredChunks and search summary live as chunks change
         Chunks.CollectionChanged += (_, _) =>
         {
-            OnPropertyChanged(nameof(FilteredChunks));
-            OnPropertyChanged(nameof(HasFilteredChunks));
-            OnPropertyChanged(nameof(ChunkSearchSummary));
+            RefreshFilteredChunks();
             OnPropertyChanged(nameof(CopyProgressLabel));
             OnPropertyChanged(nameof(HasCopyProgress));
         };
+
+        FetchedFiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasFetchedFiles));
+            OnPropertyChanged(nameof(FetchedFilesCountLabel));
+        };
     }
 
-    // ── Safe fire-and-forget ───────────────────────────────────────────────
+    // ── Fire-and-forget ────────────────────────────────────────────────────
 
     private void FireAndForget(Task task) =>
         task.ContinueWith(
@@ -413,13 +488,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var token = await SecureStorage.Default.GetAsync("github_token");
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                AccessToken  = token;
-                TokenIsSaved = true;
-            }
+            if (!string.IsNullOrWhiteSpace(token)) { AccessToken = token; TokenIsSaved = true; }
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "Could not read token from SecureStorage."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not read token."); }
 
         await MigrateOldRecentUrlsAsync();
         await RefreshSavedReposAsync();
@@ -433,11 +504,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var old = Preferences.Default.Get("recent_urls", string.Empty);
             if (string.IsNullOrWhiteSpace(old)) return;
             var existing = (await _db.GetSavedReposAsync())
-                .Select(r => r.Url)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var url in old.Split('|')
-                         .Where(u => !string.IsNullOrWhiteSpace(u))
-                         .Reverse())
+                .Select(r => r.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var url in old.Split('|').Where(u => !string.IsNullOrWhiteSpace(u)).Reverse())
                 if (!existing.Contains(url))
                     await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = "main" });
             Preferences.Default.Remove("recent_urls");
@@ -477,13 +545,73 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var token = await SecureStorage.Default.GetAsync($"repo_token_{repo.Id}");
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                AccessToken  = token;
-                TokenIsSaved = true;
-            }
+            if (!string.IsNullOrWhiteSpace(token)) { AccessToken = token; TokenIsSaved = true; }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not load token for repo {Id}.", repo.Id); }
+    }
+
+    // ── C6: Workspace restore ─────────────────────────────────────────────
+
+    private async Task RestoreWorkspaceAsync(SavedRepo repo)
+    {
+        try
+        {
+            if (repo.SavedMaxTokens > 0)
+                MaxTokensPerChunk = repo.SavedMaxTokens;
+
+            if (!string.IsNullOrEmpty(repo.SavedEnabledExts))
+            {
+                var labels = JsonSerializer.Deserialize<List<string>>(repo.SavedEnabledExts) ?? [];
+                if (labels.Count > 0)
+                {
+                    foreach (var f in FileTypeFilters)
+                        f.IsEnabled = labels.Contains(f.Label, StringComparer.OrdinalIgnoreCase);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(repo.SavedExcludedFolders))
+            {
+                var names = JsonSerializer.Deserialize<List<string>>(repo.SavedExcludedFolders) ?? [];
+                if (names.Count > 0)
+                {
+                    foreach (var f in FolderFilters)
+                        f.IsExcluded = names.Contains(f.Name, StringComparer.OrdinalIgnoreCase);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(repo.SavedPatterns))
+            {
+                var patterns = JsonSerializer.Deserialize<List<string>>(repo.SavedPatterns) ?? [];
+                foreach (var pattern in patterns)
+                {
+                    if (!FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var pf = new FilePatternFilter { Pattern = pattern, IsEnabled = true };
+                        pf.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FilePatternSummary));
+                        FilePatternFilters.Add(pf);
+                    }
+                    else
+                    {
+                        var existing = FilePatternFilters.First(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase));
+                        existing.IsEnabled = true;
+                    }
+                }
+            }
+
+            if (repo.SavedPromptSortOrder >= 0)
+            {
+                var prompt = Prompts.FirstOrDefault(p => p.OriginalSortOrder == repo.SavedPromptSortOrder);
+                if (prompt is not null)
+                {
+                    foreach (var p in Prompts) p.IsSelectedForShare = false;
+                    prompt.IsSelectedForShare = true;
+                    OnPropertyChanged(nameof(SelectedPrompt));
+                }
+            }
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not restore workspace for repo {Id}.", repo.Id); }
+
+        await Task.CompletedTask;
     }
 
     // ── Filter init ────────────────────────────────────────────────────────
@@ -585,11 +713,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void UnsubscribePrompt(PromptItem prompt)
     {
         var entry = _promptHandlers.FirstOrDefault(x => x.Prompt == prompt);
-        if (entry.Prompt is not null)
-        {
-            prompt.PropertyChanged -= entry.Handler;
-            _promptHandlers.Remove(entry);
-        }
+        if (entry.Prompt is not null) { prompt.PropertyChanged -= entry.Handler; _promptHandlers.Remove(entry); }
     }
 
     private void UnsubscribeAllPrompts()
@@ -622,7 +746,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _chunkHandlers.Clear();
     }
 
-    // ── Helper: prompt payload ─────────────────────────────────────────────
+    private void UnsubscribeChunk(CodeChunk chunk)
+    {
+        var entry = _chunkHandlers.FirstOrDefault(x => x.Chunk == chunk);
+        if (entry.Chunk is not null) { chunk.PropertyChanged -= entry.Handler; _chunkHandlers.Remove(entry); }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     private string WithPrompt(string content)
     {
@@ -634,24 +764,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
             : $"{text}\n\n{content}";
     }
 
-    // ── Helper: local path detection ───────────────────────────────────────
-
     private static bool IsLocalPath(string path) =>
         !path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
         !path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
         (path.StartsWith('/') || path.StartsWith('~') || (path.Length >= 2 && path[1] == ':'));
 
-    // ── Helper: rebuild content respecting file exclusions ─────────────────
-
-    /// <summary>
-    /// Builds the clipboard payload for a chunk, skipping any
-    /// <see cref="ChunkFile"/> entries the user has marked as excluded.
-    /// </summary>
     private static string BuildChunkContent(CodeChunk chunk)
     {
         if (chunk.FileEntries.Count == 0 || !chunk.FileEntries.Any(f => f.IsExcluded))
             return chunk.Content;
-
         var sb = new StringBuilder();
         foreach (var file in chunk.FileEntries.Where(f => !f.IsExcluded))
         {
@@ -675,20 +796,76 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var repos    = await _db.GetSavedReposAsync();
+            var repos = await _db.GetSavedReposAsync();
             var existing = repos.FirstOrDefault(r => r.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
-            if (existing is not null)
-            {
-                existing.Branch = branch;
-                await _db.UpsertRepoAsync(existing);
-            }
-            else
-            {
-                await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = branch });
-            }
+            if (existing is not null) { existing.Branch = branch; await _db.UpsertRepoAsync(existing); }
+            else await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = branch });
             await RefreshSavedReposAsync();
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save repo."); }
+    }
+
+    // ── C4: Populate FetchedFiles from raw file list ───────────────────────
+
+    private void PopulateFetchedFiles(List<(string Path, string Content)> files)
+    {
+        FetchedFiles.Clear();
+        foreach (var (path, _) in files)
+        {
+            var normalised = path.Replace('\\', '/');
+            var lastSlash  = normalised.LastIndexOf('/');
+            var folder     = lastSlash > 0 ? normalised[..lastSlash] : "Root";
+            var fileName   = lastSlash > 0 ? normalised[(lastSlash + 1)..] : normalised;
+
+            var entry = new FetchedFileEntry
+            {
+                Path     = normalised,
+                FileName = fileName,
+                Folder   = folder,
+            };
+            // Mirror existing exclusion state from FilePatternFilters
+            entry.IsExcluded = FilePatternFilters.Any(f =>
+                f.IsEnabled &&
+                fileName.Equals(f.Pattern, StringComparison.OrdinalIgnoreCase));
+
+            entry.PropertyChanged += OnFetchedFileEntryChanged;
+            FetchedFiles.Add(entry);
+        }
+    }
+
+    private void OnFetchedFileEntryChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(FetchedFileEntry.IsExcluded)) return;
+        if (sender is not FetchedFileEntry entry) return;
+
+        if (entry.IsExcluded)
+        {
+            // Add exact-filename pattern if not already present
+            if (!FilePatternFilters.Any(f => f.Pattern.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var pf = new FilePatternFilter
+                {
+                    Pattern    = entry.FileName,
+                    IsEnabled  = true,
+                    IsAutoAdded = true,
+                };
+                pf.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FilePatternSummary));
+                FilePatternFilters.Add(pf);
+                OnPropertyChanged(nameof(FilePatternSummary));
+            }
+        }
+        else
+        {
+            // Remove auto-added pattern for this file
+            var autoPattern = FilePatternFilters.FirstOrDefault(f =>
+                f.IsAutoAdded &&
+                f.Pattern.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase));
+            if (autoPattern is not null)
+            {
+                FilePatternFilters.Remove(autoPattern);
+                OnPropertyChanged(nameof(FilePatternSummary));
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -701,69 +878,58 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task FetchAsync()
     {
         if (IsBusy) return;
-
-        HasError      = false;
-        ErrorText     = string.Empty;
-        IsBusy        = true;
-        IsResultsMode = true;
+        HasError = false; ErrorText = string.Empty;
+        IsBusy = true; IsResultsMode = true;
         AutoDetectStatusText = string.Empty;
-        ChunkSearchText      = string.Empty;
+        ChunkSearchText = string.Empty;
 
-        UnsubscribeAllChunks(); Chunks.Clear();
-        ChunkCount = CopiedCount = SelectedCount =
-            TotalFiles = TotalTokens = TotalProjects = 0;
+        UnsubscribeAllChunks(); Chunks.Clear(); FetchedFiles.Clear();
+        ChunkCount = CopiedCount = SelectedCount = TotalFiles = TotalTokens = TotalProjects = 0;
         HasChunks = false;
 
-        _cts?.Cancel();
-        _cts?.Dispose();
+        _cts?.Cancel(); _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try
         {
-            var extensions       = GetSelectedExtensions();
-            var excludedFolders  = GetExcludedFolders().ToList();
-            var excludedPatterns = GetExcludedFilePatterns().ToList();
-            var progress         = new Progress<string>(msg => StatusText = msg);
-            var inputPath        = RepoUrl.Trim().Trim('"');
+            var extensions      = GetSelectedExtensions();
+            var excludedFolders = GetExcludedFolders().ToList();
+            var excludedPat     = GetExcludedFilePatterns().ToList();
+            var progress        = new Progress<string>(msg => StatusText = msg);
+            var inputPath       = RepoUrl.Trim().Trim('"');
 
             List<(string Path, string Content)> files;
 
             if (IsLocalPath(inputPath))
             {
                 files = await _localFileService.ReadFilesAsync(
-                    inputPath, extensions, excludedFolders,
-                    excludedPatterns, progress, _cts.Token);
+                    inputPath, extensions, excludedFolders, excludedPat, progress, _cts.Token);
             }
             else
             {
                 files = await _gitHubService.FetchFilesAsync(
                     inputPath, extensions, AccessToken, Branch,
-                    excludedFolders, excludedPatterns, progress, _cts.Token);
+                    excludedFolders, excludedPat, progress, _cts.Token);
 
                 if (!string.IsNullOrWhiteSpace(AccessToken))
                 {
-                    try
-                    {
-                        await SecureStorage.Default.SetAsync("github_token", AccessToken);
-                        TokenIsSaved = true;
-                    }
+                    try { await SecureStorage.Default.SetAsync("github_token", AccessToken); TokenIsSaved = true; }
                     catch (Exception ex) { _logger.LogWarning(ex, "Could not save token."); }
                 }
                 await SaveCurrentRepoAsync(inputPath, Branch);
             }
 
-            // Pre-chunk keyword filter
             if (!string.IsNullOrWhiteSpace(KeywordFilter))
             {
                 var kw = KeywordFilter.Trim();
-                files = files
-                    .Where(f => f.Content.Contains(kw, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                files = files.Where(f => f.Content.Contains(kw, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (files.Count == 0)
                     throw new InvalidOperationException(
-                        $"No files contain the keyword \"{kw}\". " +
-                        "Clear the keyword filter or try a different term.");
+                        $"No files contain the keyword \"{kw}\". Clear the keyword filter or try a different term.");
             }
+
+            // C4: populate file browser before chunking
+            PopulateFetchedFiles(files);
 
             TotalFiles = files.Count;
             StatusText = $"Chunking {files.Count} files…";
@@ -779,24 +945,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             ChunkCount = Chunks.Count;
             HasChunks  = ChunkCount > 0;
-            StatusText =
-                $"✅  {files.Count} files · {TotalProjects} projects · " +
-                $"{ChunkCount} chunks · ~{TotalTokens:N0} tokens";
+            StatusText = $"✅  {files.Count} files · {TotalProjects} projects · {ChunkCount} chunks · ~{TotalTokens:N0} tokens";
 
             OnPropertyChanged(nameof(CompactSummaryText));
             OnPropertyChanged(nameof(SelectAllChunksLabel));
         }
         catch (OperationCanceledException)
         {
-            StatusText    = "Cancelled.";
-            IsResultsMode = false;
+            StatusText = "Cancelled."; IsResultsMode = false;
         }
         catch (Exception ex)
         {
-            HasError      = true;
-            ErrorText     = ex.Message;
-            StatusText    = "Error — see message below.";
-            IsResultsMode = false;
+            HasError = true; ErrorText = ex.Message;
+            StatusText = "Error — see message below."; IsResultsMode = false;
             _logger.LogError(ex, "Fetch error.");
         }
         finally { IsBusy = false; }
@@ -805,21 +966,39 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool CanFetch() =>
         !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl) && FileTypeFilters.Any(f => f.IsEnabled);
 
-    // ── Auto-detect (Bug 7 fix: guard is now in CanAutoDetect) ────────────
+    // ── C1: Auto-detect ────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task AutoDetectFileTypesAsync()
     {
         if (string.IsNullOrWhiteSpace(RepoUrl) || IsBusy || IsAutoDetecting) return;
-        // Bug 7: Bail out silently on local paths (CanAutoDetect already hides the button,
-        // but the branch-change auto-fire path can reach here directly).
-        if (!RepoUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase)) return;
 
         IsAutoDetecting = true;
         try
         {
-            var detected = await _gitHubService.DetectFileTypesInRepoAsync(
-                RepoUrl.Trim(), AccessToken, Branch);
+            IReadOnlyDictionary<string, int> detected;
+            var inputPath = RepoUrl.Trim().Trim('"');
+
+            if (IsLocalPath(inputPath))
+            {
+                // For local paths: scan extensions directly
+                var extCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                if (Directory.Exists(inputPath))
+                {
+                    foreach (var file in Directory.EnumerateFiles(inputPath, "*.*", SearchOption.AllDirectories))
+                    {
+                        var ext = Path.GetExtension(file).ToLowerInvariant();
+                        if (!string.IsNullOrEmpty(ext))
+                            extCounts[ext] = extCounts.GetValueOrDefault(ext, 0) + 1;
+                    }
+                }
+                detected = extCounts;
+            }
+            else
+            {
+                detected = await _gitHubService.DetectFileTypesInRepoAsync(
+                    inputPath, AccessToken, Branch);
+            }
 
             if (detected.Count == 0)
             {
@@ -827,11 +1006,55 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            // First pass: enable filters whose extensions appear in detected
             foreach (var f in FileTypeFilters)
                 f.IsEnabled = f.Extensions.Any(e => detected.ContainsKey(e));
 
-            var count = FileTypeFilters.Count(f => f.IsEnabled);
-            AutoDetectStatusText = $"✅ Detected {detected.Count} types · {count} filters enabled";
+            // C1: Second pass — infer companion extensions
+            // e.g. if .cs was detected → also enable .csproj and .xml
+            var inferredLabels = new List<string>();
+            foreach (var (detectedExt, _) in detected)
+            {
+                // Check which language maps to this extension
+                foreach (var (langName, companionExts) in LanguageExtensionInference)
+                {
+                    // Find what primary extension this language contributes
+                    var primaryFilter = FileTypeFilters.FirstOrDefault(f =>
+                        f.Extensions.Any(e => e.Equals(detectedExt, StringComparison.OrdinalIgnoreCase)));
+                    if (primaryFilter is null) continue;
+
+                    // Check if the detected language name loosely matches (by looking at the filter extensions)
+                    // For .cs → enable .csproj and .xml
+                    foreach (var companionExt in companionExts)
+                    {
+                        var companionFilter = FileTypeFilters.FirstOrDefault(f =>
+                            f.Extensions.Any(e => e.Equals(companionExt, StringComparison.OrdinalIgnoreCase)));
+                        if (companionFilter is not null && !companionFilter.IsEnabled)
+                        {
+                            companionFilter.IsEnabled = true;
+                            inferredLabels.Add(companionFilter.Label);
+                        }
+                    }
+                }
+            }
+
+            // If .cs was detected (C# project), always enable .csproj
+            if (detected.Any(kv => kv.Key.Equals(".cs", StringComparison.OrdinalIgnoreCase)))
+            {
+                var csproj = FileTypeFilters.FirstOrDefault(f => f.Label == ".csproj");
+                if (csproj is not null && !csproj.IsEnabled)
+                {
+                    csproj.IsEnabled = true;
+                    if (!inferredLabels.Contains(".csproj")) inferredLabels.Add(".csproj");
+                }
+            }
+
+            var enabledCount = FileTypeFilters.Count(f => f.IsEnabled);
+            var inferredPart = inferredLabels.Count > 0
+                ? $"  ·  Inferred: {string.Join(", ", inferredLabels.Distinct())}"
+                : string.Empty;
+
+            AutoDetectStatusText = $"✅ Detected {detected.Count} type{(detected.Count == 1 ? "" : "s")}{inferredPart}  ·  {enabledCount} filters enabled";
         }
         catch (Exception ex)
         {
@@ -847,65 +1070,42 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(RepoUrl) || !RepoUrl.Contains("github.com"))
         {
-            StatusText = "⚠️ Enter a valid GitHub URL before loading branches.";
-            return;
+            StatusText = "⚠️ Enter a valid GitHub URL before loading branches."; return;
         }
-
         IsFetchingBranches = true;
         try
         {
             var branches = await _gitHubService.FetchBranchesAsync(RepoUrl.Trim(), AccessToken);
-            if (branches.Count == 0)
-            {
-                StatusText = "⚠️ No branches found. A token may be required for branch listing.";
-                return;
-            }
+            if (branches.Count == 0) { StatusText = "⚠️ No branches found. A token may be required."; return; }
             BranchOptions.Clear();
             foreach (var b in branches) BranchOptions.Add(b);
             OnPropertyChanged(nameof(HasBranchOptions));
             BranchPickerRequested?.Invoke(this, branches);
         }
-        catch (Exception ex)
-        {
-            StatusText = $"⚠️ Could not fetch branches: {ex.Message}";
-            _logger.LogWarning(ex, "Branch fetch failed.");
-        }
+        catch (Exception ex) { StatusText = $"⚠️ Could not fetch branches: {ex.Message}"; _logger.LogWarning(ex, "Branch fetch failed."); }
         finally { IsFetchingBranches = false; }
     }
 
     [RelayCommand] private void Cancel() => _cts?.Cancel();
 
-    // ── State management ───────────────────────────────────────────────────
-
     [RelayCommand]
-    private void BackToConfiguration()
-    {
-        ClearSelection();
-        IsResultsMode = false;
-        // IsConfigurationMode and IsResultsAndNoSelection are both notified via
-        // [NotifyPropertyChangedFor] on _isResultsMode — no extra call needed.
-    }
+    private void BackToConfiguration() { ClearSelection(); IsResultsMode = false; }
 
-    // ── Chip toggle commands ───────────────────────────────────────────────
+    // ── Chip toggles ───────────────────────────────────────────────────────
 
-    [RelayCommand] private static void ToggleFileType(FileTypeFilter f)    { if (f is not null) f.IsEnabled  = !f.IsEnabled;  }
-    [RelayCommand] private static void ToggleFolder(FolderFilter f)        { if (f is not null) f.IsExcluded = !f.IsExcluded; }
-    [RelayCommand] private static void ToggleFilePattern(FilePatternFilter p) { if (p is not null) p.IsEnabled = !p.IsEnabled; }
+    [RelayCommand] private static void ToggleFileType(FileTypeFilter f)      { if (f is not null) f.IsEnabled  = !f.IsEnabled;  }
+    [RelayCommand] private static void ToggleFolder(FolderFilter f)          { if (f is not null) f.IsExcluded = !f.IsExcluded; }
+    [RelayCommand] private static void ToggleFilePattern(FilePatternFilter p) { if (p is not null) p.IsEnabled = !p.IsEnabled;  }
 
-    // ── Toggle-all helpers ─────────────────────────────────────────────────
-
-    [RelayCommand] private void ToggleAllFileTypes()     { bool a = FileTypeFilters.Any(f => f.IsEnabled);  foreach (var f in FileTypeFilters)    f.IsEnabled  = !a; }
-    [RelayCommand] private void ToggleAllFolderFilters() { bool a = FolderFilters.Any(f => f.IsExcluded);   foreach (var f in FolderFilters)       f.IsExcluded = !a; }
+    [RelayCommand] private void ToggleAllFileTypes()     { bool a = FileTypeFilters.Any(f => f.IsEnabled);   foreach (var f in FileTypeFilters)    f.IsEnabled  = !a; }
+    [RelayCommand] private void ToggleAllFolderFilters() { bool a = FolderFilters.Any(f => f.IsExcluded);    foreach (var f in FolderFilters)       f.IsExcluded = !a; }
     [RelayCommand] private void ToggleAllFilePatterns()  { bool a = FilePatternFilters.Any(f => f.IsEnabled); foreach (var f in FilePatternFilters) f.IsEnabled  = !a; }
-
-    // ── Custom filter additions ────────────────────────────────────────────
 
     [RelayCommand]
     private void AddCustomFolder()
     {
         var name = CustomFolderInput.Trim();
-        if (string.IsNullOrWhiteSpace(name) ||
-            FolderFilters.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
+        if (string.IsNullOrWhiteSpace(name) || FolderFilters.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
         var folder = new FolderFilter { Name = name, IsExcluded = true };
         folder.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FolderFilterSummary));
         FolderFilters.Add(folder);
@@ -918,15 +1118,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         var raw = CustomPatternInput.Trim();
         if (string.IsNullOrWhiteSpace(raw)) return;
-        var tokens = raw
-            .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(t => t.Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
+        var tokens = raw.Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var pattern in tokens)
         {
-            if (FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
-                continue;
+            if (FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase))) continue;
             var p = new FilePatternFilter { Pattern = pattern, IsEnabled = true };
             p.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FilePatternSummary));
             FilePatternFilters.Add(p);
@@ -935,88 +1132,54 @@ public partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(FilePatternSummary));
     }
 
-    // ── History popup ──────────────────────────────────────────────────────
+    // ── C4: File browser commands ──────────────────────────────────────────
+
+    [RelayCommand] private void ToggleFetchedFiles() => IsFetchedFilesExpanded = !IsFetchedFilesExpanded;
 
     [RelayCommand]
-    private void ShowHistory() => ShowHistoryRequested?.Invoke(this, SavedRepos.ToList());
-
-    // ── Info dialog (tooltip fallback) ────────────────────────────────────
-
-    [RelayCommand]
-    private void ShowInfo(string message) => ShowInfoRequested?.Invoke(this, message ?? string.Empty);
+    private void ToggleFetchedFileExclusion(FetchedFileEntry entry)
+    {
+        if (entry is not null) entry.IsExcluded = !entry.IsExcluded;
+    }
 
     // ── Chunk copy / share ─────────────────────────────────────────────────
 
-    /// <summary>
-    /// Copies a single chunk to clipboard.
-    /// Bug 6 fix: respects per-file exclusions (also applied to multi-chunk copy).
-    /// Phase 2 P1: updates CopiedCount which drives the copy progress label.
-    /// Phase 2 P2: auto-advances to the next un-copied chunk.
-    /// </summary>
     [RelayCommand]
     private async Task CopyChunkAsync(CodeChunk chunk)
     {
         if (chunk is null) return;
         try
         {
-            var content = BuildChunkContent(chunk);
-            var payload = WithPrompt(content);
+            var payload = WithPrompt(BuildChunkContent(chunk));
             await _clipboard.SetTextAsync(payload);
             foreach (var c in Chunks) c.IsCopied = false;
             chunk.IsCopied = true;
-            CopiedCount    = Chunks.Count(c => c.IsCopied);
-            OnPropertyChanged(nameof(CopyProgressLabel));
-            OnPropertyChanged(nameof(HasCopyProgress));
+            CopiedCount = Chunks.Count(c => c.IsCopied);
         }
         catch (Exception ex) { StatusText = $"⚠️ Could not copy: {ex.Message}"; }
     }
 
-    /// <summary>
-    /// Phase 2 P2: Copies the next un-copied chunk in sequence.
-    /// If all chunks are copied, wraps around to the first.
-    /// </summary>
     [RelayCommand]
     private async Task CopyNextChunkAsync()
     {
         if (!HasChunks) return;
-
-        var nextChunk = Chunks
-            .OrderBy(c => c.Index)
-            .FirstOrDefault(c => !c.IsCopied);
-
-        // All copied — wrap to first
-        nextChunk ??= Chunks.OrderBy(c => c.Index).First();
-
-        await CopyChunkAsync(nextChunk);
+        var next = Chunks.OrderBy(c => c.Index).FirstOrDefault(c => !c.IsCopied)
+                   ?? Chunks.OrderBy(c => c.Index).First();
+        await CopyChunkAsync(next);
     }
 
     [RelayCommand]
     private async Task ShareChunkAsync(CodeChunk chunk)
     {
         if (chunk is null) return;
-        try
-        {
-            var payload = WithPrompt(chunk.Content);
-            await _shareService.ShareTextAsync(payload, $"Chunk {chunk.Index + 1} · {chunk.ProjectName}");
-        }
+        try { await _shareService.ShareTextAsync(WithPrompt(chunk.Content), $"Chunk {chunk.Index + 1} · {chunk.ProjectName}"); }
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
-    [RelayCommand]
-    private void TogglePreview(CodeChunk chunk) { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
-
-    [RelayCommand]
-    private static void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
-
-    // ── Per-file entry commands ────────────────────────────────────────────
-
-    [RelayCommand]
-    private static void ToggleFileEntryExclusion(ChunkFile file) { if (file is not null) file.IsExcluded = !file.IsExcluded; }
-
-    [RelayCommand]
-    private static void ToggleFileCode(ChunkFile file) { if (file is not null) file.IsCodeExpanded = !file.IsCodeExpanded; }
-
-    // ── Select all ────────────────────────────────────────────────────────
+    [RelayCommand] private void TogglePreview(CodeChunk chunk)  { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
+    [RelayCommand] private static void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
+    [RelayCommand] private static void ToggleFileEntryExclusion(ChunkFile file) { if (file is not null) file.IsExcluded = !file.IsExcluded; }
+    [RelayCommand] private static void ToggleFileCode(ChunkFile file)          { if (file is not null) file.IsCodeExpanded = !file.IsCodeExpanded; }
 
     [RelayCommand]
     private void SelectAllChunks()
@@ -1025,57 +1188,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         foreach (var c in Chunks) c.IsSelected = !allSelected;
     }
 
-    // ── Multi-select toolbar ───────────────────────────────────────────────
-
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ShareSelectedAsync()
     {
         var selected = Chunks.Where(c => c.IsSelected).OrderBy(c => c.Index).ToList();
         if (selected.Count == 0) return;
-
         var sb = new StringBuilder();
-        // Bug 6 fix: use BuildChunkContent for each selected chunk
-        foreach (var c in selected)
-        {
-            if (sb.Length > 0) sb.Append("\n\n");
-            sb.Append(BuildChunkContent(c));
-        }
-
-        var payload = WithPrompt(sb.ToString());
+        foreach (var c in selected) { if (sb.Length > 0) sb.Append("\n\n"); sb.Append(BuildChunkContent(c)); }
         var title = selected.Count == 1
             ? $"Chunk {selected[0].Index + 1} · {selected[0].ProjectName}"
             : $"{selected.Count} chunks · " + string.Join(", ", selected.Select(c => c.ProjectName).Distinct());
-
-        try { await _shareService.ShareTextAsync(payload, title); }
+        try { await _shareService.ShareTextAsync(WithPrompt(sb.ToString()), title); }
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
-    /// <summary>
-    /// Bug 6 fix: now uses BuildChunkContent for each selected chunk
-    /// so per-file exclusions are honoured in multi-chunk copies.
-    /// </summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task CopySelectedAsync()
     {
         var selected = Chunks.Where(c => c.IsSelected).OrderBy(c => c.Index).ToList();
         if (selected.Count == 0) return;
-
         var sb = new StringBuilder();
-        foreach (var c in selected)
-        {
-            if (sb.Length > 0) sb.Append("\n\n");
-            sb.Append(BuildChunkContent(c));
-        }
-
-        var payload = WithPrompt(sb.ToString());
+        foreach (var c in selected) { if (sb.Length > 0) sb.Append("\n\n"); sb.Append(BuildChunkContent(c)); }
         try
         {
-            await _clipboard.SetTextAsync(payload);
+            await _clipboard.SetTextAsync(WithPrompt(sb.ToString()));
             foreach (var c in Chunks) c.IsCopied = false;
             foreach (var c in selected) c.IsCopied = true;
             CopiedCount = Chunks.Count(c => c.IsCopied);
-            OnPropertyChanged(nameof(CopyProgressLabel));
-            OnPropertyChanged(nameof(HasCopyProgress));
             StatusText = $"✅ {selected.Count} chunk(s) copied to clipboard.";
         }
         catch (Exception ex) { StatusText = $"⚠️ Could not copy: {ex.Message}"; }
@@ -1084,14 +1223,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void ClearSelection() { foreach (var c in Chunks) c.IsSelected = false; }
 
-    // ── Phase 2 P4: Chunk merge ────────────────────────────────────────────
-
-    /// <summary>
-    /// Merges all selected chunks into a single new chunk.
-    /// The merged chunk is inserted at the position of the first selected chunk
-    /// and the originals are removed. Token count is re-estimated from the
-    /// combined content.
-    /// </summary>
     [RelayCommand(CanExecute = nameof(CanMerge))]
     private void MergeSelected()
     {
@@ -1100,64 +1231,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         var sb = new StringBuilder();
         var mergedFiles = new List<ChunkFile>();
-
-        foreach (var c in selected)
-        {
-            if (sb.Length > 0) sb.Append("\n\n");
-            sb.Append(c.Content);
-            mergedFiles.AddRange(c.FileEntries);
-        }
+        foreach (var c in selected) { if (sb.Length > 0) sb.Append("\n\n"); sb.Append(c.Content); mergedFiles.AddRange(c.FileEntries); }
 
         var mergedContent = sb.ToString();
-        var mergedChunk   = new CodeChunk
+        var merged = new CodeChunk
         {
             Index           = selected[0].Index,
-            ProjectName     = selected.Select(c => c.ProjectName).Distinct().Count() == 1
-                                ? selected[0].ProjectName
-                                : "Merged",
+            ProjectName     = selected.Select(c => c.ProjectName).Distinct().Count() == 1 ? selected[0].ProjectName : "Merged",
             Content         = mergedContent,
             EstimatedTokens = _chunkingService.EstimateTokens(mergedContent),
             FileEntries     = mergedFiles,
         };
 
-        // Find insertion index (position of the first selected chunk in collection)
         int insertAt = Chunks.IndexOf(selected[0]);
+        foreach (var c in selected.OrderByDescending(c => Chunks.IndexOf(c))) { UnsubscribeChunk(c); Chunks.Remove(c); }
+        if (insertAt >= 0 && insertAt <= Chunks.Count) Chunks.Insert(insertAt, merged);
+        else Chunks.Add(merged);
+        SubscribeChunk(merged);
 
-        // Remove selected chunks (highest index first to preserve positions)
-        foreach (var c in selected.OrderByDescending(c => Chunks.IndexOf(c)))
+        // C5 fix: notify index change after renumber
+        for (int i = 0; i < Chunks.Count; i++)
         {
-            UnsubscribeChunk(c);
-            Chunks.Remove(c);
+            Chunks[i].Index = i;
+            Chunks[i].NotifyIndexChanged();
         }
 
-        // Insert merged chunk and subscribe
-        if (insertAt >= 0 && insertAt <= Chunks.Count)
-            Chunks.Insert(insertAt, mergedChunk);
-        else
-            Chunks.Add(mergedChunk);
-
-        SubscribeChunk(mergedChunk);
-
-        // Re-number all chunks
-        for (int i = 0; i < Chunks.Count; i++) Chunks[i].Index = i;
-
-        ChunkCount  = Chunks.Count;
-        TotalTokens = Chunks.Sum(c => c.EstimatedTokens);
+        ChunkCount = Chunks.Count; TotalTokens = Chunks.Sum(c => c.EstimatedTokens);
         SelectedCount = 0;
-
+        RefreshFilteredChunks();
         OnPropertyChanged(nameof(CompactSummaryText));
         OnPropertyChanged(nameof(SelectAllChunksLabel));
-        OnPropertyChanged(nameof(FilteredChunks));
-    }
-
-    private void UnsubscribeChunk(CodeChunk chunk)
-    {
-        var entry = _chunkHandlers.FirstOrDefault(x => x.Chunk == chunk);
-        if (entry.Chunk is not null)
-        {
-            chunk.PropertyChanged -= entry.Handler;
-            _chunkHandlers.Remove(entry);
-        }
     }
 
     // ── Prompts ────────────────────────────────────────────────────────────
@@ -1168,64 +1271,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task CopyPromptAsync(PromptItem prompt)
     {
         if (prompt is null) return;
-        try
-        {
-            await _clipboard.SetTextAsync(prompt.Content);
-            foreach (var p in Prompts) p.IsCopied = false;
-            prompt.IsCopied = true;
-        }
+        try { await _clipboard.SetTextAsync(prompt.Content); foreach (var p in Prompts) p.IsCopied = false; prompt.IsCopied = true; }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not copy prompt."); }
     }
 
-    /// <summary>
-    /// Toggles the IsSelectedForShare flag on the tapped prompt.
-    /// Deselects all other prompts first so only one can be active.
-    /// </summary>
     [RelayCommand]
     private void SelectPromptForShare(PromptItem prompt)
     {
         if (prompt is null) return;
-        var wasSelected = prompt.IsSelectedForShare;
+        var was = prompt.IsSelectedForShare;
         foreach (var p in Prompts) p.IsSelectedForShare = false;
-        prompt.IsSelectedForShare = !wasSelected;
+        prompt.IsSelectedForShare = !was;
         OnPropertyChanged(nameof(SelectedPrompt));
     }
 
-    /// <summary>
-    /// Fix 1: Closes all other prompt previews AND collapses the edit panel
-    /// on the target prompt before toggling its preview.
-    /// Only one preview is open at a time; preview and edit never coexist.
-    /// </summary>
     [RelayCommand]
     private void TogglePromptPreview(PromptItem prompt)
     {
         if (prompt is null) return;
-
         bool willExpand = !prompt.IsPreviewExpanded;
-
-        // Close all previews
         foreach (var p in Prompts) p.IsPreviewExpanded = false;
-
-        // If we were collapsing, stay collapsed. If expanding, also close edit.
-        if (willExpand)
-        {
-            prompt.IsEditing        = false;  // Fix 1: mutual exclusion with edit mode
-            prompt.IsPreviewExpanded = true;
-        }
+        if (willExpand) { prompt.IsEditing = false; prompt.IsPreviewExpanded = true; }
     }
 
-    /// <summary>
-    /// Fix 1: Collapses the preview on the target prompt before opening
-    /// the edit panel — ensuring preview and edit never coexist.
-    /// </summary>
     [RelayCommand]
     private void StartEditPrompt(PromptItem prompt)
     {
         if (prompt is null) return;
-        prompt.IsPreviewExpanded = false;    // Fix 1: close preview before editing
-        prompt.EditTitle         = prompt.Title;
-        prompt.EditContent       = prompt.Content;
-        prompt.IsEditing         = true;
+        prompt.IsPreviewExpanded = false;
+        prompt.EditTitle = prompt.Title; prompt.EditContent = prompt.Content; prompt.IsEditing = true;
     }
 
     [RelayCommand]
@@ -1234,15 +1308,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (prompt is null) return;
         var title = prompt.EditTitle.Trim();
         if (string.IsNullOrEmpty(title)) title = "Untitled Prompt";
-        prompt.Title     = title;
-        prompt.Content   = prompt.EditContent.Trim();
-        prompt.IsEditing = false;
-        try
-        {
-            var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt)));
-            prompt.Id = r.Id;
-            OnPropertyChanged(nameof(SelectedPrompt));
-        }
+        prompt.Title = title; prompt.Content = prompt.EditContent.Trim(); prompt.IsEditing = false;
+        try { var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); prompt.Id = r.Id; OnPropertyChanged(nameof(SelectedPrompt)); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save prompt."); }
     }
 
@@ -1258,57 +1325,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task DeletePromptAsync(PromptItem prompt)
     {
         if (prompt is null || prompt.IsBuiltIn) return;
-        try
-        {
-            await _db.DeletePromptAsync(prompt.Id);
-            UnsubscribePrompt(prompt);
-            Prompts.Remove(prompt);
-        }
+        try { await _db.DeletePromptAsync(prompt.Id); UnsubscribePrompt(prompt); Prompts.Remove(prompt); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not delete prompt."); }
     }
 
     [RelayCommand]
     private void AddNewPrompt()
     {
-        // Close any open previews/edits before adding
         foreach (var p in Prompts) { p.IsPreviewExpanded = false; p.IsEditing = false; }
         var item = new PromptItem { IsEditing = true, EditTitle = "New Prompt", EditContent = "" };
-        SubscribePrompt(item);
-        Prompts.Add(item);
+        SubscribePrompt(item); Prompts.Add(item);
     }
 
     [RelayCommand]
     private async Task ResetPromptsAsync()
     {
-        try
-        {
-            await _db.ResetPromptsToDefaultAsync();
-            await RefreshPromptsAsync();
-        }
+        try { await _db.ResetPromptsToDefaultAsync(); await RefreshPromptsAsync(); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not reset prompts."); }
     }
 
-    /// <summary>
-    /// Bug 8 fix: Looks up the factory content from the static
-    /// <see cref="BuiltInPrompts"/> dictionary using the prompt's
-    /// <see cref="PromptItem.OriginalSortOrder"/> — independent of whatever
-    /// was previously saved to SQLite.
-    /// </summary>
     [RelayCommand]
     private async Task ResetSinglePromptAsync(PromptItem prompt)
     {
         if (prompt is null || !prompt.IsBuiltIn) return;
-
         if (!BuiltInPrompts.BySortOrder.TryGetValue(prompt.OriginalSortOrder, out var seed))
-        {
-            StatusText = "⚠️ Could not find factory default for this prompt.";
-            return;
-        }
-
-        prompt.Title     = seed.Title;
-        prompt.Content   = seed.Content;
-        prompt.IsEditing = false;
-
+        { StatusText = "⚠️ Could not find factory default for this prompt."; return; }
+        prompt.Title = seed.Title; prompt.Content = seed.Content; prompt.IsEditing = false;
         try { await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not reset single prompt."); }
     }
@@ -1321,8 +1363,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task PasteUrlAsync()
     {
         var text = await Clipboard.Default.GetTextAsync();
-        if (!string.IsNullOrWhiteSpace(text))
-            RepoUrl = text.Trim().Trim('"');
+        if (!string.IsNullOrWhiteSpace(text)) RepoUrl = text.Trim().Trim('"');
     }
 
     [RelayCommand] private void SelectRepo(SavedRepo repo) => SelectedSavedRepo = repo;
@@ -1346,51 +1387,65 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void RenameSelectedRepo()
     {
-        if (SelectedSavedRepo is not null)
-            RepoRenameRequested?.Invoke(this, SelectedSavedRepo);
+        if (SelectedSavedRepo is not null) RepoRenameRequested?.Invoke(this, SelectedSavedRepo);
     }
 
     public async Task SetRepoNameAsync(SavedRepo repo, string name)
     {
-        repo.Name = name;
-        await _db.UpsertRepoAsync(repo);
-        await RefreshSavedReposAsync();
+        repo.Name = name; await _db.UpsertRepoAsync(repo); await RefreshSavedReposAsync();
     }
 
-    // ── Token ──────────────────────────────────────────────────────────────
+    // ── C6: Save workspace ─────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task SaveWorkspaceAsync()
+    {
+        if (SelectedSavedRepo is null) return;
+        try
+        {
+            var repo = SelectedSavedRepo;
+            repo.SavedMaxTokens       = (int)MaxTokensPerChunk;
+            repo.SavedEnabledExts     = JsonSerializer.Serialize(
+                FileTypeFilters.Where(f => f.IsEnabled).Select(f => f.Label).ToList());
+            repo.SavedExcludedFolders = JsonSerializer.Serialize(
+                FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name).ToList());
+            repo.SavedPatterns        = JsonSerializer.Serialize(
+                FilePatternFilters.Where(f => f.IsEnabled && !f.IsAutoAdded).Select(f => f.Pattern).ToList());
+            repo.SavedPromptSortOrder = SelectedPrompt?.OriginalSortOrder ?? -1;
+
+            await _db.UpdateRepoWorkspaceAsync(repo);
+            OnPropertyChanged(nameof(HasWorkspaceSaved));
+
+            AutoDetectStatusText = "✓ Workspace saved";
+            await Task.Delay(2000);
+            if (AutoDetectStatusText == "✓ Workspace saved") AutoDetectStatusText = string.Empty;
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not save workspace."); }
+    }
+
+    // ── Token info ─────────────────────────────────────────────────────────
 
     [RelayCommand] private void ShowTokenInfo() => TokenInfoRequested?.Invoke(this, EventArgs.Empty);
+    [RelayCommand] private void ShowInfo(string message) => ShowInfoRequested?.Invoke(this, message ?? string.Empty);
 
     [RelayCommand]
     private void ClearToken()
     {
-        try { SecureStorage.Default.Remove("github_token"); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Remove token failed."); }
-        AccessToken  = string.Empty;
-        TokenIsSaved = false;
+        try { SecureStorage.Default.Remove("github_token"); } catch (Exception ex) { _logger.LogWarning(ex, "Remove token failed."); }
+        AccessToken = string.Empty; TokenIsSaved = false;
     }
 
     [RelayCommand]
-    private void SetPresetTokens(string value)
-    {
-        if (int.TryParse(value, out var tokens)) MaxTokensPerChunk = tokens;
-    }
+    private void SetPresetTokens(string value) { if (int.TryParse(value, out var t)) MaxTokensPerChunk = t; }
 
-    // ── Keyword filter (pre-chunk) ─────────────────────────────────────────
-
-    [RelayCommand] private void ToggleKeyword()      => IsKeywordExpanded = !IsKeywordExpanded;
-    [RelayCommand] private void ClearKeywordFilter() => KeywordFilter     = string.Empty;
-
-    // ── Section expand/collapse ────────────────────────────────────────────
-
+    [RelayCommand] private void ToggleKeyword()      => IsKeywordExpanded      = !IsKeywordExpanded;
+    [RelayCommand] private void ClearKeywordFilter() => KeywordFilter          = string.Empty;
     [RelayCommand] private void ToggleFileTypes()    => IsFileTypesExpanded    = !IsFileTypesExpanded;
     [RelayCommand] private void ToggleFolders()      => IsFoldersExpanded      = !IsFoldersExpanded;
     [RelayCommand] private void ToggleFilePatterns() => IsFilePatternsExpanded = !IsFilePatternsExpanded;
+    [RelayCommand] private void ShowHistory()        => ShowHistoryRequested?.Invoke(this, SavedRepos.ToList());
 
-    // ── Chunk search (Phase 2 P3) ──────────────────────────────────────────
-
-    [RelayCommand]
-    private void ClearChunkSearch() => ChunkSearchText = string.Empty;
+    [RelayCommand] private void ClearChunkSearch() => ChunkSearchText = string.Empty;
 
     // ── Reset ──────────────────────────────────────────────────────────────
 
@@ -1398,15 +1453,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void Reset()
     {
         ClearSelection();
-        UnsubscribeAllChunks(); Chunks.Clear();
-        ChunkCount = CopiedCount = SelectedCount =
-            TotalFiles = TotalTokens = TotalProjects = 0;
-        HasChunks = HasError = false;
-        ErrorText            = string.Empty;
-        IsResultsMode        = false;
-        AutoDetectStatusText = string.Empty;
-        ChunkSearchText      = string.Empty;
-        StatusText           = "Enter a GitHub URL or local path, then press Chunk.";
+        UnsubscribeAllChunks(); Chunks.Clear(); FetchedFiles.Clear();
+        ChunkCount = CopiedCount = SelectedCount = TotalFiles = TotalTokens = TotalProjects = 0;
+        HasChunks = HasError = false; ErrorText = string.Empty;
+        IsResultsMode = false; AutoDetectStatusText = string.Empty; ChunkSearchText = string.Empty;
+        StatusText = "Enter a GitHub URL or local path, then press Chunk.";
         OnPropertyChanged(nameof(FileTypeCardSummary));
         OnPropertyChanged(nameof(CompactSummaryText));
         OnPropertyChanged(nameof(CopyProgressLabel));

@@ -15,13 +15,12 @@ public partial class MainPage : ContentPage
         // ── Branch picker ──────────────────────────────────────────────────
         _viewModel.BranchPickerRequested += async (_, branches) =>
         {
-            var result = await DisplayActionSheet(
-                "Select branch", "Cancel", null, [.. branches]);
+            var result = await DisplayActionSheet("Select branch", "Cancel", null, [.. branches]);
             if (result is not null and not "Cancel")
                 _viewModel.Branch = result;
         };
 
-        // ── GitHub token info dialog ───────────────────────────────────────
+        // ── Token info dialog ──────────────────────────────────────────────
         _viewModel.TokenInfoRequested += async (_, _) =>
         {
             await DisplayAlert(
@@ -33,29 +32,26 @@ public partial class MainPage : ContentPage
                 "3. Click \"Generate new token\"\n" +
                 "4. Under Repository permissions, set Contents → Read-only\n" +
                 "5. Copy the token (starts with github_pat_…) and paste it here.\n\n" +
-                "The token is stored securely on your device and never sent anywhere except GitHub.",
+                "The token is stored securely on your device.",
                 "Got it");
         };
 
         // ── Generic info dialog (tooltip fallback) ─────────────────────────
-        // All ⓘ icons raise ShowInfoCommand which fires this event with the
-        // full text as the parameter — guaranteeing readability on every platform.
         _viewModel.ShowInfoRequested += async (_, message) =>
         {
             if (!string.IsNullOrWhiteSpace(message))
                 await DisplayAlert("Info", message, "OK");
         };
 
-        // ── Repo rename dialog ─────────────────────────────────────────────
+        // ── Repo rename ────────────────────────────────────────────────────
         _viewModel.RepoRenameRequested += async (_, repo) =>
         {
             var name = await DisplayPromptAsync(
                 "Name this repository",
-                "Enter a friendly label for quick identification:",
+                "Enter a friendly label:",
                 initialValue: repo.Name,
-                placeholder:  "e.g. My API Project",
-                maxLength:    60);
-
+                placeholder: "e.g. My API Project",
+                maxLength: 60);
             if (name is not null)
                 await _viewModel.SetRepoNameAsync(repo, name);
         };
@@ -68,28 +64,22 @@ public partial class MainPage : ContentPage
                 await DisplayAlert("History", "No recent repositories saved yet.", "OK");
                 return;
             }
-
-            var labels = repos.Select(r => r.DisplayName).ToArray();
-            var picked = await DisplayActionSheet("Recent repositories", "Cancel", null, labels);
-
+            var picked = await DisplayActionSheet(
+                "Recent repositories", "Cancel", null,
+                repos.Select(r => r.DisplayName).ToArray());
             if (picked is null or "Cancel") return;
-
             var chosen = repos.FirstOrDefault(r => r.DisplayName == picked);
             if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
         };
 
-        // ── Reset ALL prompts — confirmation dialog ────────────────────────
-        // Wired via x:Name rather than a command binding so we can show the
-        // confirmation alert without putting UI logic in the ViewModel.
+        // ── Reset ALL prompts — confirmation ───────────────────────────────
         ResetPromptsButton.Clicked += async (_, _) =>
         {
-            bool confirmed = await DisplayAlert(
+            bool ok = await DisplayAlert(
                 "Reset all prompts",
-                "This will delete all custom prompts and restore the 6 built-in defaults. Continue?",
+                "Delete all custom prompts and restore the 6 built-in defaults?",
                 "Reset", "Cancel");
-
-            if (confirmed)
-                await _viewModel.ResetPromptsCommand.ExecuteAsync(null);
+            if (ok) await _viewModel.ResetPromptsCommand.ExecuteAsync(null);
         };
     }
 

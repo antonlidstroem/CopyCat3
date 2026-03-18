@@ -3,6 +3,14 @@ using SQLite;
 
 namespace CopyCat.Services;
 
+/// <summary>
+/// SQLite-net implementation of <see cref="IDatabaseService"/>.
+///
+/// C6 addition — workspace column migration:
+///   <see cref="MigrateWorkspaceColumnsAsync"/> adds the five new SavedRepo
+///   workspace columns to existing databases via ALTER TABLE. Each ALTER is
+///   wrapped in try-catch so the method is idempotent (safe to re-run).
+/// </summary>
 public class DatabaseService : IDatabaseService, IAsyncDisposable
 {
     private SQLiteAsyncConnection? _db;
@@ -36,11 +44,40 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 
             _db = connection;
 
+            // Run migrations before seeding so new columns exist if needed
+            await MigrateWorkspaceColumnsAsync();
             await SeedBuiltInPromptsIfEmptyAsync();
         }
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Adds the five C6 workspace columns to SavedRepos.
+    /// Each ALTER TABLE is executed in its own try-catch so that if a column
+    /// already exists (SQLite throws "duplicate column name") the error is
+    /// swallowed silently and subsequent columns are still attempted.
+    /// This makes the migration idempotent and safe to run on every launch.
+    /// </summary>
+    private async Task MigrateWorkspaceColumnsAsync()
+    {
+        if (_db is null) return;
+
+        var migrations = new[]
+        {
+            "ALTER TABLE SavedRepos ADD COLUMN SavedMaxTokens INTEGER DEFAULT 0",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedEnabledExts TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedExcludedFolders TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedPatterns TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedPromptSortOrder INTEGER DEFAULT -1",
+        };
+
+        foreach (var sql in migrations)
+        {
+            try { await _db.ExecuteAsync(sql); }
+            catch { /* Column already exists — safe to ignore */ }
         }
     }
 
@@ -82,6 +119,29 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         await db.DeleteAllAsync<SavedRepo>();
     }
 
+    /// <summary>
+    /// Persists the five workspace snapshot columns without updating LastUsed.
+    /// Uses a targeted UPDATE so other fields are not accidentally overwritten.
+    /// </summary>
+    public async Task UpdateRepoWorkspaceAsync(SavedRepo repo)
+    {
+        var db = await Db();
+        await db.ExecuteAsync(
+            @"UPDATE SavedRepos
+              SET SavedMaxTokens        = ?,
+                  SavedEnabledExts      = ?,
+                  SavedExcludedFolders  = ?,
+                  SavedPatterns         = ?,
+                  SavedPromptSortOrder  = ?
+              WHERE Id = ?",
+            repo.SavedMaxTokens,
+            repo.SavedEnabledExts,
+            repo.SavedExcludedFolders,
+            repo.SavedPatterns,
+            repo.SavedPromptSortOrder,
+            repo.Id);
+    }
+
     // ── Prompts ────────────────────────────────────────────────────────────
 
     public async Task<List<PromptRecord>> GetPromptsAsync()
@@ -106,11 +166,6 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         await db.DeleteAsync<PromptRecord>(id);
     }
 
-    /// <summary>
-    /// Wipes ALL prompt rows and re-seeds the default built-in set.
-    /// Separated from <see cref="SeedBuiltInPromptsIfEmptyAsync"/> so
-    /// the seed logic can be called unconditionally without a count guard.
-    /// </summary>
     public async Task ResetPromptsToDefaultAsync()
     {
         var db = await Db();
@@ -120,7 +175,6 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 
     // ── Seeding ────────────────────────────────────────────────────────────
 
-    /// <summary>Seeds only when the table is empty (used on first launch).</summary>
     private async Task SeedBuiltInPromptsIfEmptyAsync()
     {
         var db    = await Db();
@@ -129,68 +183,18 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         await SeedBuiltInPromptsAsync(db);
     }
 
-    /// <summary>Unconditionally inserts the six built-in prompts (table must already be cleared).</summary>
     private static async Task SeedBuiltInPromptsAsync(SQLiteAsyncConnection db)
     {
-        var builtIns = new[]
+        foreach (var (sortOrder, seed) in BuiltInPrompts.BySortOrder)
         {
-            new PromptRecord
+            await db.InsertAsync(new PromptRecord
             {
-                Title     = "Code Writer",
-                Content   = "You are an expert software engineer. I will provide code from a repository. " +
-                            "Implement the requested feature following the existing patterns, architecture, " +
-                            "and coding conventions. Ensure the solution is clean, maintainable, and integrates " +
-                            "seamlessly with the existing code.\n\nHere is the repository code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 0,
-            },
-            new PromptRecord
-            {
-                Title     = "Code Analyzer",
-                Content   = "You are an expert code reviewer. Analyze the following code from a repository. " +
-                            "Identify potential bugs, performance issues, security vulnerabilities, and areas " +
-                            "for improvement. Provide specific, actionable feedback with examples.\n\n" +
-                            "Here is the code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 1,
-            },
-            new PromptRecord
-            {
-                Title     = "Code Planner",
-                Content   = "You are a senior software architect. Based on the following codebase, help me " +
-                            "plan a development strategy. Identify the architecture patterns used, suggest " +
-                            "improvements, and outline a step-by-step plan for implementing [DESCRIBE YOUR GOAL].\n\n" +
-                            "Here is the repository code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 2,
-            },
-            new PromptRecord
-            {
-                Title     = "Refactor Guide",
-                Content   = "You are an expert in clean code and refactoring. Review the following code and " +
-                            "provide a detailed refactoring guide. Focus on improving readability, reducing " +
-                            "complexity, applying SOLID principles, and modernizing patterns where appropriate.\n\n" +
-                            "Here is the code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 3,
-            },
-            new PromptRecord
-            {
-                Title     = "Test Writer",
-                Content   = "You are a test-driven development expert. Based on the following code, write " +
-                            "comprehensive unit tests. Cover edge cases, happy paths, and error scenarios. " +
-                            "Follow any existing testing patterns; otherwise use best practices for the " +
-                            "detected framework.\n\nHere is the code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 4,
-            },
-            new PromptRecord
-            {
-                Title     = "Bug Finder",
-                Content   = "You are a debugging expert. Carefully read the following code and find all bugs, " +
-                            "logical errors, null-reference risks, race conditions, and edge cases that could " +
-                            "cause failures in production. For each issue, explain the root cause and suggest a fix.\n\n" +
-                            "Here is the code:\n\n[PASTE CHUNK]",
-                IsBuiltIn = true, SortOrder = 5,
-            },
-        };
-
-        foreach (var p in builtIns) await db.InsertAsync(p);
+                Title     = seed.Title,
+                Content   = seed.Content,
+                IsBuiltIn = true,
+                SortOrder = sortOrder,
+            });
+        }
     }
 
     // ── Dispose ────────────────────────────────────────────────────────────

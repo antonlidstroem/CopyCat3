@@ -63,6 +63,8 @@ public partial class PromptItem : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
     [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderThickness))]
+    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
     private bool _isCopied;
 
     // ── Single-select for share ────────────────────────────────────────────
@@ -70,6 +72,7 @@ public partial class PromptItem : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
     [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
     private bool _isSelectedForShare;
 
     // ── Visual distinction: pristine built-in vs modified/custom ──────────
@@ -92,17 +95,35 @@ public partial class PromptItem : ObservableObject
         }
     }
 
-    // ── Card colours ──────────────────────────────────────────────────────
+    // ── C2: Three-zone card colours ───────────────────────────────────────
+    //
+    // Zone A background: amber tint when selected for share.
+    //   IsSelectedForShare → #1C1406 (AccentPrimary at ~11% on C1Deep)
+    //   Default            → C2Surface (#0D2128)
+    //   IsCopied does NOT tint Zone A — only the card border changes.
+    //
+    // Card border: teal (C5) at 2.5px when copied, type-border otherwise.
+    //   Type-border: amber when IsModifiedOrCustom, quiet C3Border when pristine.
+    //   Both copied+selected: teal border + amber Zone A (they coexist).
 
+    /// <summary>Zone A (select area) background color.</summary>
+    public Color ZoneABackground =>
+        IsSelectedForShare ? Color.FromArgb("#1C1406") : Color.FromArgb("#0D2128");
+
+    /// <summary>Full card border color — teal when copied, type-based otherwise.</summary>
+    public Color CardBorderColor =>
+        IsCopied ? Color.FromArgb("#00B4BC") :
+        IsModifiedOrCustom ? Color.FromArgb("#F59E0B") :
+                             Color.FromArgb("#1A3D4A");
+
+    /// <summary>Card border thickness — heavier when copied to signal completion.</summary>
+    public double CardBorderThickness => IsCopied ? 2.5 : 1.5;
+
+    /// <summary>Legacy background property kept for compatibility.</summary>
     public Color CardBackgroundColor =>
         IsCopied           ? Color.FromArgb("#061A1B") :
         IsSelectedForShare ? Color.FromArgb("#1A1406") :
                              Color.FromArgb("#0D2128");
-
-    public Color CardBorderColor =>
-        IsCopied           ? Color.FromArgb("#00B4BC") :
-        IsSelectedForShare ? Color.FromArgb("#F59E0B") :
-                             Color.FromArgb("#1A3D4A");
 
     // ── Derived ───────────────────────────────────────────────────────────
 
