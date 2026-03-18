@@ -74,7 +74,7 @@
     <Color x:Key="BorderSelectionToolbar">#00B4BC</Color>
     <!-- Legacy aliases -->
     <Color x:Key="BorderChipOn">#22C55E</Color>
-    <Color x:Key="BorderChipOff">#1A3D4A</Color>
+    <!--<Color x:Key="BorderChipOff">#1A3D4A</Color>-->
     <Color x:Key="BorderChipOnFolder">#EF4444</Color>
     <Color x:Key="BorderChipOnPattern">#EF4444</Color>
     <Color x:Key="BorderChunkDefault">#1A3D4A</Color>
