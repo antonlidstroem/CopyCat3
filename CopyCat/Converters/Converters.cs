@@ -2,10 +2,7 @@ using System.Globalization;
 
 namespace CopyCat.Converters;
 
-/// <summary>
-/// Converts a bool to one of two <see cref="Color"/> values.
-/// Set TrueColor / FalseColor from StaticResource in XAML.
-/// </summary>
+/// <summary>Converts a bool to one of two Color values.</summary>
 public class BoolToColorConverter : IValueConverter
 {
     public Color TrueColor  { get; set; } = Colors.Transparent;
@@ -46,6 +43,19 @@ public class BoolToStringConverter : IValueConverter
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value is true ? TrueValue : FalseValue;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotImplementedException();
+}
+
+/// <summary>
+/// Returns true when the string value is non-null and non-empty.
+/// Used for the chunk search clear button visibility.
+/// </summary>
+public class StringNotEmptyConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        !string.IsNullOrEmpty(value as string);
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotImplementedException();

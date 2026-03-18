@@ -32,9 +32,18 @@ public partial class MainPage : ContentPage
                 "2. Developer settings → Personal access tokens → Fine-grained tokens\n" +
                 "3. Click \"Generate new token\"\n" +
                 "4. Under Repository permissions, set Contents → Read-only\n" +
-                "5. Copy the generated token (starts with github_pat_…) and paste it here.\n\n" +
-                "The token is stored securely on your device and is never sent to any server other than GitHub.",
+                "5. Copy the token (starts with github_pat_…) and paste it here.\n\n" +
+                "The token is stored securely on your device and never sent anywhere except GitHub.",
                 "Got it");
+        };
+
+        // ── Generic info dialog (tooltip fallback) ─────────────────────────
+        // All ⓘ icons raise ShowInfoCommand which fires this event with the
+        // full text as the parameter — guaranteeing readability on every platform.
+        _viewModel.ShowInfoRequested += async (_, message) =>
+        {
+            if (!string.IsNullOrWhiteSpace(message))
+                await DisplayAlert("Info", message, "OK");
         };
 
         // ── Repo rename dialog ─────────────────────────────────────────────
@@ -69,15 +78,13 @@ public partial class MainPage : ContentPage
             if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
         };
 
-        // ── Reset Prompts — confirmation alert ─────────────────────────────
-        //
-        // The button is wired by x:Name in XAML rather than a command binding
-        // so we can show the DisplayAlert confirmation before executing.
-        // This keeps the ViewModel free of any UI/dialog dependencies.
+        // ── Reset ALL prompts — confirmation dialog ────────────────────────
+        // Wired via x:Name rather than a command binding so we can show the
+        // confirmation alert without putting UI logic in the ViewModel.
         ResetPromptsButton.Clicked += async (_, _) =>
         {
             bool confirmed = await DisplayAlert(
-                "Reset prompts",
+                "Reset all prompts",
                 "This will delete all custom prompts and restore the 6 built-in defaults. Continue?",
                 "Reset", "Cancel");
 

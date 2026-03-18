@@ -6,20 +6,11 @@ namespace CopyCat.Behaviors;
 /// <summary>
 /// Attach to a chunk-card Border to get a tactile scale-up animation
 /// whenever the bound <see cref="CodeChunk.IsCopied"/> property turns true.
-///
-/// Usage in XAML:
-///   &lt;Border&gt;
-///     &lt;Border.Behaviors&gt;
-///       &lt;behaviors:TactileCopyBehavior /&gt;
-///     &lt;/Border.Behaviors&gt;
-///   &lt;/Border&gt;
 /// </summary>
 public class TactileCopyBehavior : Behavior<Border>
 {
-    private Border?   _border;
+    private Border?    _border;
     private CodeChunk? _chunk;
-
-    // ── Attach / Detach ────────────────────────────────────────────────────
 
     protected override void OnAttachedTo(Border border)
     {
@@ -36,8 +27,6 @@ public class TactileCopyBehavior : Behavior<Border>
         _border = null;
         base.OnDetachingFrom(border);
     }
-
-    // ── Context changes ────────────────────────────────────────────────────
 
     private void OnBindingContextChanged(object? sender, EventArgs e)
     {
@@ -63,15 +52,12 @@ public class TactileCopyBehavior : Behavior<Border>
         }
     }
 
-    // ── Animation ──────────────────────────────────────────────────────────
-
     private async void OnChunkPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(CodeChunk.IsCopied)) return;
         if (_chunk?.IsCopied != true)                      return;
         if (_border is null)                               return;
 
-        // Scale up 2 % → back to normal, 100 ms each
         await _border.ScaleTo(1.02, 100, Easing.CubicOut);
         await _border.ScaleTo(1.00, 100, Easing.CubicIn);
     }

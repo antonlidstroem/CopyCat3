@@ -10,6 +10,13 @@ public partial class CodeChunk : ObservableObject
     public string Content         { get; set; } = string.Empty;
     public int    EstimatedTokens { get; set; }
 
+    /// <summary>
+    /// Individual source files packed into this chunk.
+    /// Populated by ChunkingService — drives the per-file preview rows
+    /// and selective exclusion when copying.
+    /// </summary>
+    public List<ChunkFile> FileEntries { get; set; } = [];
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
     [NotifyPropertyChangedFor(nameof(CardBorderColor))]
@@ -25,22 +32,20 @@ public partial class CodeChunk : ObservableObject
     [NotifyPropertyChangedFor(nameof(PreviewToggleIcon))]
     private bool _isPreviewExpanded;
 
-    // ── Card colours: copied (green) > selected (blue) > default ──────────
+    // ── Card colours (6-color palette) ────────────────────────────────────
 
     public Color CardBackgroundColor =>
-        IsCopied   ? Color.FromArgb("#00A3A9") :
-        IsSelected ? Color.FromArgb("#F59E0B") :
-                     Color.FromArgb("#008C8B");
+        IsCopied   ? Color.FromArgb("#061A1B") :
+        IsSelected ? Color.FromArgb("#1A1406") :
+                     Color.FromArgb("#0D2128");
 
     public Color CardBorderColor =>
-        IsCopied   ? Color.FromArgb("#F59E0B") :
-        IsSelected ? Color.FromArgb("#006770") :
-                     Color.FromArgb("#003B46");
+        IsCopied   ? Color.FromArgb("#00B4BC") :
+        IsSelected ? Color.FromArgb("#F59E0B") :
+                     Color.FromArgb("#1A3D4A");
 
-
-    /// <summary>Share button tint — green when this chunk is the active copied one.</summary>
     public Color CopyButtonTextColor =>
-        IsCopied ? Color.FromArgb("#22C55E") : Color.FromArgb("#666690");
+        IsCopied ? Color.FromArgb("#00B4BC") : Color.FromArgb("#1A3D4A");
 
     // ── Labels ────────────────────────────────────────────────────────────
 
@@ -49,10 +54,18 @@ public partial class CodeChunk : ObservableObject
 
     public string PreviewToggleIcon => IsPreviewExpanded ? "▲" : "▼";
 
+    /// <summary>
+    /// Kept for backwards compatibility. Returns newline-joined file names.
+    /// The new UI uses FileEntries directly; this is still used when
+    /// FileEntries is empty (chunks from an older session).
+    /// </summary>
     public string PreviewSnippet
     {
         get
         {
+            if (FileEntries.Count > 0)
+                return string.Join("\n", FileEntries.Select(f => f.FileName));
+
             var names = HeaderRegex()
                 .Matches(Content)
                 .Select(m => m.Groups["path"].Value.Trim())

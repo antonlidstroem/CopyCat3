@@ -4,184 +4,739 @@
                     xmlns:conv="clr-namespace:CopyCat.Converters"
                     x:Class="CopyCat.Resources.Styles.Styles">
 
-    <Color x:Key="C_Amber">#F59E0B</Color>
-    <Color x:Key="C_DeepTeal">#003B46</Color>
-    <Color x:Key="C_MidiTeal">#006770</Color>
-    <Color x:Key="C_Dark">#070F12</Color>
-    <Color x:Key="C_Cyan">#00A3A9</Color>
-    <Color x:Key="C_Teal">#008C8B</Color>
-    <Color x:Key="C_AmberLight">#FCD34D</Color>
-    <Color x:Key="C_TransTeal">#1A00D4AA</Color>
-    <Color x:Key="C_Red">#FF7070</Color>
+    <!-- ══════════════════════════════════════════════════════════════════════
+         6-COLOR DESIGN SYSTEM
+         ══════════════════════════════════════════════════════════════════════
+         C1  Deep     #0A1215   page background
+         C2  Surface  #0D2128   card / input surface
+         C3  Border   #1A3D4A   structural borders
+         C4  Accent   #F59E0B   primary action / selection / slider
+         C5  Teal     #00B4BC   success / copy feedback / info
+         C6  Red      #EF4444   error / excluded state
+         Text: White (#EEEEFF) or muted teal variants
+         ══════════════════════════════════════════════════════════════════════ -->
 
-    <Color x:Key="BgApp">#070F12</Color>
-    <Color x:Key="BgCard">#003B46</Color>
-    <Color x:Key="TextPrimary">#FCD34D</Color>
-    <Color x:Key="TextMuted">#00A3A9</Color>
-    <Color x:Key="BorderDefault">#006770</Color>
+    <!-- Primitives (source of truth) -->
+    <Color x:Key="C1Deep">#0A1215</Color>
+    <Color x:Key="C2Surface">#0D2128</Color>
+    <Color x:Key="C3Border">#1A3D4A</Color>
+    <Color x:Key="C4Accent">#F59E0B</Color>
+    <Color x:Key="C5Teal">#00B4BC</Color>
+    <Color x:Key="C6Red">#EF4444</Color>
 
-    <conv:BoolToColorConverter x:Key="ChipBorderConv" TrueColor="{StaticResource C_Amber}" FalseColor="{StaticResource C_MidiTeal}" />
-    <conv:BoolToColorConverter x:Key="ChipBgConv"     TrueColor="{StaticResource C_Amber}" FalseColor="{StaticResource C_MidiTeal}" />
-    <conv:BoolToColorConverter x:Key="SelectionDotBgConv" TrueColor="{StaticResource C_Amber}" FalseColor="Transparent" />
-    <conv:BoolToColorConverter x:Key="SelectionDotBorderConv" TrueColor="{StaticResource C_Amber}" FalseColor="{StaticResource C_MidiTeal}" />
-    <conv:InverseBoolConverter x:Key="InverseBool" />
-    <conv:BoolToStringConverter x:Key="ExpandArrowConv" TrueValue="▲" FalseValue="▼" />
-    <conv:BoolToStringConverter x:Key="SelectionHintConv" TrueValue="" FalseValue="tap cards to select" />
+    <!-- Semantic surface aliases -->
+    <Color x:Key="BgApp">#0A1215</Color>
+    <Color x:Key="BgCard">#0D2128</Color>
+    <Color x:Key="BgInput">#0A1215</Color>
+    <Color x:Key="BgStatus">#0A1215</Color>
+    <Color x:Key="BgSuccess">#0D2128</Color>
+    <Color x:Key="BgError">#1A0808</Color>
+    <Color x:Key="BgPreview">#0A1215</Color>
+    <Color x:Key="BgPromptCard">#0D2128</Color>
+    <Color x:Key="BgPromptEdit">#0A1215</Color>
+    <Color x:Key="BgSmartBar">#0A1215</Color>
+    <Color x:Key="BgSelectionToolbar">#0A1215</Color>
 
-    <Style TargetType="Page">
+    <!-- Chip states: green=included, red=excluded -->
+    <Color x:Key="BgChipIncluded">#0D2820</Color>
+    <Color x:Key="BgChipExcluded">#2A0D0D</Color>
+    <Color x:Key="BgChipOff">#0D2128</Color>
+    <Color x:Key="BorderChipIncluded">#22C55E</Color>
+    <Color x:Key="BorderChipExcluded">#EF4444</Color>
+    <Color x:Key="BorderChipOff">#1A3D4A</Color>
+
+    <!-- Accents -->
+    <Color x:Key="AccentPrimary">#F59E0B</Color>
+    <Color x:Key="AccentPrimaryBg">#221A06</Color>
+    <Color x:Key="AccentPrimaryBorder">#55F59E0B</Color>
+    <Color x:Key="AccentSecond">#00B4BC</Color>
+    <Color x:Key="AccentSecondBg">#061A1B</Color>
+    <Color x:Key="AccentSecondBorder">#4400B4BC</Color>
+
+    <!-- Text -->
+    <Color x:Key="TextPrimary">#EEEEFF</Color>
+    <Color x:Key="TextSecondary">#00B4BC</Color>
+    <Color x:Key="TextMuted">#4A8A92</Color>
+    <Color x:Key="TextDim">#2A5A62</Color>
+    <Color x:Key="TextError">#EF4444</Color>
+    <Color x:Key="TextOnAccent">#FFFFFF</Color>
+    <!-- Legacy aliases kept so existing XAML bindings compile -->
+    <Color x:Key="TextGreen">#00B4BC</Color>
+    <Color x:Key="TextCode">#4A8A92</Color>
+    <Color x:Key="TextCopied">#00B4BC</Color>
+    <Color x:Key="TextAccent">#F59E0B</Color>
+
+    <!-- Borders -->
+    <Color x:Key="BorderDefault">#1A3D4A</Color>
+    <Color x:Key="BorderInput">#1A3D4A</Color>
+    <Color x:Key="BorderSuccess">#2200B4BC</Color>
+    <Color x:Key="BorderError">#EF4444</Color>
+    <Color x:Key="BorderSelectionToolbar">#00B4BC</Color>
+    <!-- Legacy aliases -->
+    <Color x:Key="BorderChipOn">#22C55E</Color>
+    <Color x:Key="BorderChipOff">#1A3D4A</Color>
+    <Color x:Key="BorderChipOnFolder">#EF4444</Color>
+    <Color x:Key="BorderChipOnPattern">#EF4444</Color>
+    <Color x:Key="BorderChunkDefault">#1A3D4A</Color>
+    <Color x:Key="BorderChunkCopied">#00B4BC</Color>
+    <Color x:Key="BorderChunkSelected">#F59E0B</Color>
+    <Color x:Key="BorderPreview">#1A3D4A</Color>
+    <Color x:Key="BorderPrompt">#1A3D4A</Color>
+
+    <!-- Chunk card state backgrounds -->
+    <Color x:Key="BgChunkDefault">#0D2128</Color>
+    <Color x:Key="BgChunkCopied">#061A1B</Color>
+    <Color x:Key="BgChunkSelected">#1A1406</Color>
+
+    <!-- Slider -->
+    <Color x:Key="SliderTrackActive">#F59E0B</Color>
+    <Color x:Key="SliderTrackInactive">#1A3D4A</Color>
+    <Color x:Key="SliderThumb">#F59E0B</Color>
+    <Color x:Key="ActivityIndicatorColor">#F59E0B</Color>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CONVERTERS
+         ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Unified chip converters — green=included, red=excluded -->
+    <conv:BoolToColorConverter x:Key="ChipIncludedBorderConv"
+                               TrueColor="{StaticResource BorderChipIncluded}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="ChipIncludedBgConv"
+                               TrueColor="{StaticResource BgChipIncluded}"
+                               FalseColor="{StaticResource BgChipOff}" />
+    <conv:BoolToColorConverter x:Key="ChipExcludedBorderConv"
+                               TrueColor="{StaticResource BorderChipExcluded}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="ChipExcludedBgConv"
+                               TrueColor="{StaticResource BgChipExcluded}"
+                               FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Legacy chip converter aliases (FileType = included = green) -->
+    <conv:BoolToColorConverter x:Key="ChipBorderConv"
+                               TrueColor="{StaticResource BorderChipIncluded}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="ChipBgConv"
+                               TrueColor="{StaticResource BgChipIncluded}"
+                               FalseColor="{StaticResource BgChipOff}" />
+    <!-- Folder: IsExcluded=true → red -->
+    <conv:BoolToColorConverter x:Key="FolderChipBorderConv"
+                               TrueColor="{StaticResource BorderChipExcluded}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="FolderChipBgConv"
+                               TrueColor="{StaticResource BgChipExcluded}"
+                               FalseColor="{StaticResource BgChipOff}" />
+    <!-- Pattern: IsEnabled=true means file is excluded → red -->
+    <conv:BoolToColorConverter x:Key="PatternChipBorderConv"
+                               TrueColor="{StaticResource BorderChipExcluded}"
+                               FalseColor="{StaticResource BorderChipOff}" />
+    <conv:BoolToColorConverter x:Key="PatternChipBgConv"
+                               TrueColor="{StaticResource BgChipExcluded}"
+                               FalseColor="{StaticResource BgChipOff}" />
+
+    <!-- Chip label -->
+    <conv:BoolToColorConverter x:Key="ChipLabelColorConv"
+                               TrueColor="{StaticResource TextPrimary}"
+                               FalseColor="{StaticResource TextMuted}" />
+
+    <!-- Selection dot -->
+    <conv:BoolToColorConverter x:Key="SelectionDotBgConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="Transparent" />
+    <conv:BoolToColorConverter x:Key="SelectionDotBorderConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="{StaticResource BorderDefault}" />
+    <conv:BoolToColorConverter x:Key="ShareSelectDotBgConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="Transparent" />
+    <conv:BoolToColorConverter x:Key="ShareSelectDotBorderConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="{StaticResource BorderDefault}" />
+
+    <!-- Prompt card border: modified/custom = amber, pristine built-in = quiet border -->
+    <conv:BoolToColorConverter x:Key="PromptBorderConv"
+                               TrueColor="{StaticResource AccentPrimary}"
+                               FalseColor="{StaticResource BorderDefault}" />
+
+    <!-- General -->
+    <conv:InverseBoolConverter        x:Key="InverseBool" />
+    <conv:IntGreaterThanZeroConverter x:Key="IntGtZero" />
+    <conv:BoolToStringConverter x:Key="ExpandArrowConv"   TrueValue="▲" FalseValue="▼" />
+    <conv:BoolToStringConverter x:Key="SelectionHintConv" TrueValue=""  FalseValue="tap cards to select" />
+
+    <!-- Returns true when the string is non-null and non-empty.
+         Used for chunk search bar clear-button visibility. -->
+    <conv:StringNotEmptyConverter x:Key="StringNotEmptyConv" />
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         GLOBAL DEFAULTS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Page" ApplyToDerivedTypes="True">
         <Setter Property="BackgroundColor" Value="{StaticResource BgApp}" />
     </Style>
     <Style TargetType="Label">
-        <Setter Property="TextColor" Value="White" />
+        <Setter Property="TextColor"  Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+    </Style>
+    <Style TargetType="Entry">
+        <Setter Property="TextColor"        Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontFamily"       Value="OpenSansRegular" />
+        <Setter Property="BackgroundColor"  Value="Transparent" />
+    </Style>
+    <Style TargetType="Editor">
+        <Setter Property="TextColor"        Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontFamily"       Value="OpenSansRegular" />
+        <Setter Property="BackgroundColor"  Value="Transparent" />
     </Style>
     <Style TargetType="Button">
         <Setter Property="FontFamily" Value="OpenSansSemibold" />
     </Style>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CARDS
+         ══════════════════════════════════════════════════════════════════════ -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="BackgroundColor" Value="{StaticResource BgCard}" />
         <Setter Property="StrokeThickness" Value="1" />
         <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
         <Setter Property="StrokeShape"     Value="RoundRectangle 14" />
-        <Setter Property="Padding"          Value="14" />
-        <Setter Property="Margin"           Value="0,0,0,10" />
+        <Setter Property="Padding"         Value="14" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
     </Style>
 
-    <Style x:Key="ListItemBase" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_Dark}" />
-        <Setter Property="StrokeThickness" Value="1.5" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
-        <Setter Property="Margin"          Value="0,0,0,8" />
-    </Style>
-
-    <Style x:Key="ChunkBorder" BasedOn="{StaticResource ListItemBase}" TargetType="Border" />
-    <Style x:Key="PromptCardBorder" BasedOn="{StaticResource ListItemBase}" TargetType="Border" />
-
-    <Style x:Key="InputBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_Dark}" />
-        <Setter Property="Stroke"          Value="{StaticResource C_MidiTeal}" />
+    <Style x:Key="CompactHeaderCard" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgCard}" />
         <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 14" />
+        <Setter Property="Padding"         Value="14,10" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         INPUTS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="InputBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgInput}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderInput}" />
         <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="0" />
     </Style>
 
     <Style x:Key="InputEntry" TargetType="Entry">
-        <Setter Property="TextColor" Value="White" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource C_Cyan}" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="TextColor"        Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"         Value="14" />
+        <Setter Property="HeightRequest"    Value="50" />
+        <Setter Property="Margin"           Value="12,0" />
+        <Setter Property="BackgroundColor"  Value="Transparent" />
     </Style>
 
+    <!-- Prompt editor — larger than default for comfortable editing -->
     <Style x:Key="InlineEditor" TargetType="Editor">
-        <Setter Property="TextColor" Value="White" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="MinimumHeightRequest" Value="100" />
+        <Setter Property="TextColor"            Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="13" />
+        <Setter Property="BackgroundColor"      Value="{StaticResource BgPromptEdit}" />
+        <Setter Property="Margin"               Value="0,4,0,4" />
+        <Setter Property="MinimumHeightRequest" Value="200" />
     </Style>
 
-    <Style x:Key="PrimaryBtn" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_Amber}" />
-        <Setter Property="TextColor"       Value="{StaticResource C_Dark}" />
-        <Setter Property="CornerRadius"    Value="14" />
-        <Setter Property="FontAttributes"  Value="Bold" />
+    <Style x:Key="BranchPickerLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontSize"      Value="14" />
+        <Setter Property="FontFamily"    Value="OpenSansRegular" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+        <Setter Property="MaxLines"      Value="1" />
     </Style>
 
-    <Style x:Key="SecondaryBtn" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor"       Value="{StaticResource C_Amber}" />
-        <Setter Property="BorderColor"     Value="{StaticResource C_Amber}" />
-        <Setter Property="BorderWidth"     Value="1" />
-        <Setter Property="CornerRadius"    Value="12" />
-    </Style>
-
-    <Style x:Key="BackBtn" BasedOn="{StaticResource SecondaryBtn}" TargetType="Button" />
-
-    <Style x:Key="ToggleAllBtn" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_TransTeal}" />
-        <Setter Property="TextColor"       Value="{StaticResource C_AmberLight}" />
-        <Setter Property="FontSize"        Value="11" />
-        <Setter Property="CornerRadius"    Value="8" />
-        <Setter Property="Padding"         Value="8,2" />
-    </Style>
-
-    <Style x:Key="AutoDetectBtn" BasedOn="{StaticResource ToggleAllBtn}" TargetType="Button">
-        <Setter Property="TextColor" Value="{StaticResource C_Cyan}" />
-    </Style>
-
-    <Style x:Key="IconBtn" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor"       Value="{StaticResource C_Cyan}" />
-        <Setter Property="FontSize"        Value="18" />
-    </Style>
-
-    <Style x:Key="SmallIconBtn" BasedOn="{StaticResource IconBtn}" TargetType="Button">
-        <Setter Property="FontSize" Value="14" />
-    </Style>
-
-    <Style x:Key="ResetPromptsBtn" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor"       Value="{StaticResource C_Red}" />
-        <Setter Property="BorderColor"     Value="{StaticResource C_Red}" />
-        <Setter Property="BorderWidth"     Value="1" />
-        <Setter Property="CornerRadius"    Value="10" />
-    </Style>
-
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TYPOGRAPHY
+         ══════════════════════════════════════════════════════════════════════ -->
     <Style x:Key="SectionTitle" TargetType="Label">
-        <Setter Property="TextColor"      Value="{StaticResource C_Cyan}" />
-        <Setter Property="FontSize"       Value="11" />
-        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor"        Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"         Value="11" />
+        <Setter Property="FontAttributes"   Value="Bold" />
         <Setter Property="CharacterSpacing" Value="1.5" />
-        <Setter Property="Margin"         Value="0,0,0,8" />
+        <Setter Property="Margin"           Value="0,0,0,10" />
     </Style>
 
     <Style x:Key="FieldLabel" TargetType="Label">
-        <Setter Property="TextColor" Value="{StaticResource C_Cyan}" />
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"  Value="12" />
+        <Setter Property="Margin"    Value="0,0,0,4" />
+    </Style>
+
+    <Style x:Key="HintLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+        <Setter Property="Margin"        Value="0,0,0,8" />
+    </Style>
+
+    <Style x:Key="SliderWarningLabel" TargetType="Label">
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+        <Setter Property="Margin"        Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="MonospaceLabel" TargetType="Label">
+        <Setter Property="FontFamily"    Value="Courier New" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
+    <Style x:Key="FileTypeSummaryLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="FontFamily"    Value="OpenSansSemibold" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
+    <!-- Bold summary label shown in collapsed filter cards -->
+    <Style x:Key="FilterSummaryLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="FontFamily"    Value="OpenSansSemibold" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+        <Setter Property="Margin"        Value="0,0,0,6" />
+    </Style>
+
+    <Style x:Key="CompactSummaryLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"      Value="13" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+        <Setter Property="MaxLines"      Value="1" />
+    </Style>
+
+    <Style x:Key="HeaderTitle" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"       Value="26" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <Style x:Key="HeaderSubtitle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="12" />
     </Style>
 
-    <Style x:Key="CardTitleLabel" TargetType="Label">
-        <Setter Property="TextColor"      Value="{StaticResource C_AmberLight}" />
+    <!-- ══════════════════════════════════════════════════════════════════════
+         UNIFIED FILTER CHIP — used by ALL filter sections
+         Green border = item is INCLUDED
+         Red border   = item is EXCLUDED
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="ChipBorder" TargetType="Border">
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
+        <Setter Property="Padding"         Value="10,6" />
+        <Setter Property="Margin"          Value="0,0,4,4" />
+    </Style>
+
+    <Style x:Key="ChipLabel" TargetType="Label">
+        <Setter Property="FontSize"       Value="12" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+        <Setter Property="LineBreakMode"  Value="WordWrap" />
+        <Setter Property="MaxLines"       Value="0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         BUTTONS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="PrimaryBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextOnAccent}" />
+        <Setter Property="FontSize"             Value="17" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="58" />
+        <Setter Property="Padding"              Value="16,0" />
+    </Style>
+
+    <Style x:Key="SecondaryBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource BgCard}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"             Value="15" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="50" />
+        <Setter Property="Padding"              Value="12,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="BackBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource BgCard}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"             Value="15" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="50" />
+        <Setter Property="Padding"              Value="12,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="IconBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="Transparent" />
+        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="18" />
+        <Setter Property="Padding"              Value="8,0" />
+        <Setter Property="MinimumHeightRequest" Value="50" />
+        <Setter Property="MinimumWidthRequest"  Value="44" />
+    </Style>
+
+    <Style x:Key="SmallIconBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="Transparent" />
+        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="13" />
+        <Setter Property="Padding"              Value="6,0" />
+        <Setter Property="MinimumHeightRequest" Value="40" />
+        <Setter Property="MinimumWidthRequest"  Value="36" />
+    </Style>
+
+    <Style x:Key="ToggleAllBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimaryBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"             Value="11" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="CornerRadius"         Value="8" />
+        <Setter Property="Padding"              Value="10,4" />
+        <Setter Property="MinimumHeightRequest" Value="32" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="AutoDetectBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"             Value="11" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="CornerRadius"         Value="8" />
+        <Setter Property="Padding"              Value="10,4" />
+        <Setter Property="MinimumHeightRequest" Value="32" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentSecondBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="SliderPresetBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource BgInput}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"             Value="12" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="8" />
+        <Setter Property="Padding"              Value="0,0" />
+        <Setter Property="MinimumHeightRequest" Value="34" />
+        <Setter Property="BorderColor"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="ChunkActionBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"             Value="12" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="8" />
+        <Setter Property="Padding"              Value="10,4" />
+        <Setter Property="MinimumHeightRequest" Value="34" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentSecondBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <!-- Reset prompts button -->
+    <Style x:Key="ResetPromptsBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="Transparent" />
+        <Setter Property="TextColor"            Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"             Value="12" />
+        <Setter Property="CornerRadius"         Value="8" />
+        <Setter Property="Padding"              Value="10,4" />
+        <Setter Property="MinimumHeightRequest" Value="32" />
+        <Setter Property="BorderColor"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <!-- Copy / Share selected chunks buttons in smart bar -->
+    <Style x:Key="CopySelectedBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"             Value="13" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="Padding"              Value="12,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentSecondBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <Style x:Key="ShareBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimaryBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"             Value="13" />
+        <Setter Property="FontFamily"           Value="OpenSansSemibold" />
+        <Setter Property="CornerRadius"         Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="Padding"              Value="12,0" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SMART ACTION BAR
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SmartActionBarBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSmartBar}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0" />
+    </Style>
+
+    <!-- Selection toolbar — lives inside smart bar -->
+    <Style x:Key="SelectionToolbarBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSelectionToolbar}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderSelectionToolbar}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="10,8" />
+    </Style>
+
+    <Style x:Key="SelectionCountLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"       Value="13" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <Style x:Key="SelectionTokensLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"  Value="11" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SAVED REPOS LIST
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SavedReposListBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgInput}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="0" />
+        <Setter Property="Margin"          Value="0,0,0,6" />
+    </Style>
+
+    <Style x:Key="SavedRepoRowLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize"      Value="13" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+        <Setter Property="MaxLines"      Value="1" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CHUNK CARDS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="ChunkBorder" TargetType="Border">
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="Padding"         Value="0" />
+        <Setter Property="Margin"          Value="0,0,0,6" />
+    </Style>
+
+    <Style x:Key="ChunkTitleLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource TextPrimary}" />
         <Setter Property="FontSize"       Value="15" />
         <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+        <Setter Property="LineBreakMode"  Value="TailTruncation" />
     </Style>
 
-    <Style x:Key="CardSubLabel" TargetType="Label">
-        <Setter Property="TextColor" Value="{StaticResource C_Cyan}" />
+    <Style x:Key="ChunkSubLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize"  Value="12" />
+        <Setter Property="Margin"    Value="0,2,0,0" />
     </Style>
 
+    <!-- Selection dot -->
     <Style x:Key="SelectionDot" TargetType="Border">
-        <Setter Property="WidthRequest"  Value="22" />
-        <Setter Property="HeightRequest" Value="22" />
         <Setter Property="StrokeThickness" Value="1.5" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 11" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="WidthRequest"    Value="22" />
+        <Setter Property="HeightRequest"   Value="22" />
         <Setter Property="VerticalOptions" Value="Center" />
     </Style>
 
     <Style x:Key="SelectionDotCheck" TargetType="Label">
-        <Setter Property="Text" Value="✓" />
-        <Setter Property="TextColor" Value="{StaticResource C_Dark}" />
-        <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="Text"                    Value="✓" />
+        <Setter Property="TextColor"               Value="{StaticResource TextOnAccent}" />
+        <Setter Property="FontSize"                Value="12" />
+        <Setter Property="FontAttributes"          Value="Bold" />
+        <Setter Property="HorizontalOptions"       Value="Center" />
+        <Setter Property="VerticalOptions"         Value="Center" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+    </Style>
+
+    <!-- "✓ Copied" badge -->
+    <Style x:Key="CopiedBadgeBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentSecondBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 6" />
+        <Setter Property="Padding"         Value="8,3" />
         <Setter Property="VerticalOptions" Value="Center" />
     </Style>
 
-    <Style TargetType="Slider">
-        <Setter Property="MinimumTrackColor" Value="{StaticResource C_Amber}" />
-        <Setter Property="MaximumTrackColor" Value="{StaticResource C_Dark}" />
-        <Setter Property="ThumbColor"         Value="{StaticResource C_AmberLight}" />
+    <Style x:Key="CopiedBadgeLabel" TargetType="Label">
+        <Setter Property="Text"           Value="✓ Copied" />
+        <Setter Property="TextColor"      Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"       Value="11" />
+        <Setter Property="FontAttributes" Value="Bold" />
     </Style>
 
-    <Style x:Key="TokenBadgeBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_TransTeal}" />
-        <Setter Property="Stroke"          Value="{StaticResource C_Amber}" />
-        <Setter Property="Padding"          Value="8,4" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
+    <!-- File entry preview row inside chunk card -->
+    <Style x:Key="PreviewBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgPreview}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,12,12" />
+        <Setter Property="Padding"         Value="0" />
+    </Style>
+
+    <Style x:Key="PreviewLabel" TargetType="Label">
+        <Setter Property="FontFamily"    Value="Courier New" />
+        <Setter Property="FontSize"      Value="11" />
+        <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="LineBreakMode" Value="NoWrap" />
+        <Setter Property="Padding"       Value="12,8" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PROMPT CARDS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="PromptCardBorder" TargetType="Border">
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="Padding"         Value="0" />
+        <Setter Property="Margin"          Value="0,0,0,8" />
+    </Style>
+
+    <Style x:Key="PromptTitleLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontSize"       Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <Style x:Key="PromptPreviewLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
+    <Style x:Key="PromptPreviewLabel2" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"      Value="12" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+        <Setter Property="MaxLines"      Value="2" />
+        <Setter Property="Margin"        Value="0,4,0,0" />
+    </Style>
+
+    <Style x:Key="PromptEditBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgPromptEdit}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,12,12" />
+        <Setter Property="Padding"         Value="12,10,12,14" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SUMMARY STATS
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SummaryBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgSuccess}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderSuccess}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
+        <Setter Property="Padding"         Value="12" />
+        <Setter Property="Margin"          Value="0,0,0,14" />
+    </Style>
+
+    <Style x:Key="StatNumberLabel" TargetType="Label">
+        <Setter Property="TextColor"         Value="{StaticResource AccentSecond}" />
+        <Setter Property="FontSize"          Value="22" />
+        <Setter Property="FontAttributes"    Value="Bold" />
+        <Setter Property="FontFamily"        Value="OpenSansSemibold" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="StatCaptionLabel" TargetType="Label">
+        <Setter Property="TextColor"         Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"          Value="11" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         STATUS / ERROR
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="StatusBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource BgStatus}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderDefault}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="14,10" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="StatusLabel" TargetType="Label">
+        <Setter Property="TextColor"               Value="{StaticResource TextMuted}" />
+        <Setter Property="FontSize"                Value="13" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="LineBreakMode"           Value="WordWrap" />
     </Style>
 
     <Style x:Key="ErrorBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource C_Dark}" />
-        <Setter Property="Stroke"          Value="{StaticResource C_Red}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource BgError}" />
         <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Padding"          Value="10" />
+        <Setter Property="Stroke"          Value="{StaticResource BorderError}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 10" />
+        <Setter Property="Padding"         Value="14,10" />
+        <Setter Property="Margin"          Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="ErrorLabel" TargetType="Label">
+        <Setter Property="TextColor"     Value="{StaticResource TextError}" />
+        <Setter Property="FontSize"      Value="13" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TOKEN BADGE
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="TokenBadgeBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource AccentPrimaryBg}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentPrimaryBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 8" />
+        <Setter Property="Padding"         Value="12,6" />
+    </Style>
+
+    <Style x:Key="TokenBadgeLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource AccentPrimary}" />
+        <Setter Property="FontSize"       Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="FontFamily"     Value="OpenSansSemibold" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SAVED TOKEN INDICATOR
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SavedTokenBorder" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke"          Value="{StaticResource AccentSecondBorder}" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 6" />
+        <Setter Property="Padding"         Value="8,4" />
     </Style>
 
 </ResourceDictionary>
