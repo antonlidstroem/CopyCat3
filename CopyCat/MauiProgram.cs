@@ -37,18 +37,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IDatabaseService,  DatabaseService>();
         builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
 
-        // BUG 5 FIX: FileTypeDetectorService (Trees API) was registered here
-        // but never injected into any consumer — MainViewModel uses
-        // IGitHubService.DetectFileTypesInRepoAsync (ZIP-based) instead.
-        // Removed to eliminate the dead singleton allocation and the
-        // confusion it causes when reading the DI setup.
-        //
-        // If you later want to switch auto-detect to the lighter Trees API
-        // approach (one JSON request vs a full ZIP download), inject
-        // IFileTypeDetectorService into MainViewModel and call
-        // DetectExtensionsAsync there instead of DetectFileTypesInRepoAsync.
-
-        // UI
+        // UI — PromptsPage is NOT registered here: it is instantiated on-demand
+        // in MainPage.xaml.cs via Navigation.PushAsync(new PromptsPage(viewModel)).
+        // This avoids DI singleton lifecycle conflicts with the Navigation stack.
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainPage>();
 

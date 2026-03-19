@@ -1,5 +1,6 @@
 using CopyCat.Services;
 using CopyCat.ViewModels;
+using CopyCat.Views;
 
 namespace CopyCat;
 
@@ -36,7 +37,7 @@ public partial class MainPage : ContentPage
                 "Got it");
         };
 
-        // ── Generic info dialog (tooltip fallback) ─────────────────────────
+        // ── Generic info dialog (tooltip fallback for mobile) ─────────────
         _viewModel.ShowInfoRequested += async (_, message) =>
         {
             if (!string.IsNullOrWhiteSpace(message))
@@ -72,14 +73,11 @@ public partial class MainPage : ContentPage
             if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
         };
 
-        // ── Reset ALL prompts — confirmation ───────────────────────────────
-        ResetPromptsButton.Clicked += async (_, _) =>
+        // ── Navigate to PromptsPage ────────────────────────────────────────
+        _viewModel.NavigateToPromptsPageRequested += async (_, _) =>
         {
-            bool ok = await DisplayAlert(
-                "Reset all prompts",
-                "Delete all custom prompts and restore the 6 built-in defaults?",
-                "Reset", "Cancel");
-            if (ok) await _viewModel.ResetPromptsCommand.ExecuteAsync(null);
+            var page = new PromptsPage(_viewModel);
+            await Navigation.PushAsync(page);
         };
     }
 

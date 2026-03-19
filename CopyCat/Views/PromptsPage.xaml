@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:CopyCat.ViewModels"
+             xmlns:models="clr-namespace:CopyCat.Models"
+             x:Class="CopyCat.Views.PromptsPage"
+             x:DataType="vm:MainViewModel"
+             x:Name="PromptsPageRef"
+             Title="AI Prompts"
+             BackgroundColor="{StaticResource BgApp}">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- ═══════════════════════════════════════ SCROLLABLE CONTENT -->
+        <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Default">
+            <VerticalStackLayout Padding="14,14,14,8" Spacing="0">
+
+                <!-- Active prompt banner -->
+                <Border BackgroundColor="{StaticResource AccentSecondBg}"
+                        StrokeThickness="1"
+                        Stroke="{StaticResource AccentSecondBorder}"
+                        StrokeShape="RoundRectangle 12"
+                        Padding="14,10"
+                        Margin="0,0,0,10"
+                        IsVisible="{Binding HasSelectedPrompt}">
+                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                        <Label Text="✓" TextColor="{StaticResource AccentSecond}"
+                               FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
+                        <VerticalStackLayout VerticalOptions="Center" Spacing="1">
+                            <Label Text="ACTIVE PROMPT" Style="{StaticResource SectionTitle}"
+                                   Margin="0" TextColor="{StaticResource AccentSecond}" />
+                            <Label Text="{Binding SelectedPromptLabel}"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   FontSize="13" FontFamily="OpenSansSemibold" />
+                        </VerticalStackLayout>
+                    </HorizontalStackLayout>
+                </Border>
+
+                <!-- Hint when no prompt selected -->
+                <Label Text="Tap the left zone of any prompt card to select it. The selected prompt is automatically prepended when you copy or share chunks."
+                       Style="{StaticResource HintLabel}"
+                       Margin="0,0,0,10"
+                       IsVisible="{Binding HasSelectedPrompt, Converter={StaticResource InverseBool}}" />
+
+                <!-- ══ PROMPT CARDS — BindableLayout (no CollectionView on Android) -->
+                <VerticalStackLayout Spacing="0">
+                    <BindableLayout.ItemsSource>
+                        <Binding Path="Prompts" />
+                    </BindableLayout.ItemsSource>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:PromptItem">
+
+                            <Border Style="{StaticResource PromptCardBorder}"
+                                    Stroke="{Binding IsModifiedOrCustom, Converter={StaticResource PromptBorderConv}}"
+                                    StrokeThickness="{Binding CardBorderThickness}">
+                                <VerticalStackLayout Spacing="0">
+
+                                    <!-- Three-zone grid: Row0=content, Row1=Zone C expand strip -->
+                                    <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,90">
+
+                                        <!-- ZONE A — Select (tap = toggle IsSelectedForShare) -->
+                                        <Grid Grid.Row="0" Grid.Column="0"
+                                              BackgroundColor="{Binding ZoneABackground}"
+                                              Padding="12,10">
+                                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding Title}" Style="{StaticResource PromptTitleLabel}" />
+                                                <Label Text="{Binding PreviewText}"
+                                                       Style="{StaticResource PromptPreviewLabel2}"
+                                                       IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}" />
+                                            </VerticalStackLayout>
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.SelectPromptForShareCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                            </Grid.GestureRecognizers>
+                                        </Grid>
+
+                                        <!-- Zone A/B separator -->
+                                        <BoxView Grid.Row="0" Grid.Column="0"
+                                                 HorizontalOptions="End"
+                                                 Style="{StaticResource CardZoneSeparatorView}" />
+
+                                        <!-- ZONE B — Copy/Edit/Reset buttons -->
+                                        <VerticalStackLayout Grid.Row="0" Grid.Column="1"
+                                                             Spacing="4" VerticalOptions="Center"
+                                                             HorizontalOptions="Center"
+                                                             Padding="0,8">
+                                            <Button Style="{StaticResource SmallIconBtn}" Text="📋"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.CopyPromptCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    ToolTipProperties.Text="Copy prompt text to clipboard" />
+                                            <Button Style="{StaticResource SmallIconBtn}" Text="✎"
+                                                    IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.StartEditPromptCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    ToolTipProperties.Text="Edit this prompt's title and content" />
+                                            <Button Style="{StaticResource SmallIconBtn}" Text="↺"
+                                                    IsVisible="{Binding IsBuiltIn}"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.ResetSinglePromptCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    ToolTipProperties.Text="Restore this built-in prompt to its factory default text" />
+                                        </VerticalStackLayout>
+
+                                        <!-- ZONE C — Expand strip -->
+                                        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                Style="{StaticResource CardZoneCBorder}">
+                                            <Grid ColumnDefinitions="*,Auto" HeightRequest="36">
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding PreviewToggleIcon}"
+                                                       TextColor="{StaticResource TextMuted}"
+                                                       FontSize="11" VerticalOptions="Center"
+                                                       HorizontalTextAlignment="Center" />
+                                                <Label Grid.Column="1"
+                                                       Text="Full text"
+                                                       TextColor="{StaticResource TextDim}"
+                                                       FontSize="10" VerticalOptions="Center"
+                                                       Margin="0,0,14,0" />
+                                                <Grid.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.TogglePromptPreviewCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Grid.GestureRecognizers>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Full text preview panel -->
+                                    <Border IsVisible="{Binding IsPreviewExpanded}"
+                                            BackgroundColor="{StaticResource BgPreview}"
+                                            StrokeThickness="0" Padding="12,8,12,12">
+                                        <Label Text="{Binding Content}" Style="{StaticResource PromptPreviewLabel}" />
+                                    </Border>
+
+                                    <!-- Edit panel -->
+                                    <Border Style="{StaticResource PromptEditBorder}"
+                                            IsVisible="{Binding IsEditing}">
+                                        <VerticalStackLayout Spacing="8">
+                                            <Border Style="{StaticResource InputBorder}">
+                                                <Entry Style="{StaticResource InputEntry}"
+                                                       Text="{Binding EditTitle}"
+                                                       Placeholder="Prompt title…" />
+                                            </Border>
+                                            <Border Style="{StaticResource InputBorder}">
+                                                <Editor Style="{StaticResource InlineEditor}"
+                                                        Text="{Binding EditContent}"
+                                                        Placeholder="Prompt text… Use [PASTE CHUNK] where you want the code inserted." />
+                                            </Border>
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                                <Button Grid.Column="0" Style="{StaticResource SmallIconBtn}"
+                                                        Text="🗑 Delete"
+                                                        IsVisible="{Binding IsBuiltIn, Converter={StaticResource InverseBool}}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.DeletePromptCommand}"
+                                                        CommandParameter="{Binding .}"
+                                                        TextColor="{StaticResource TextError}"
+                                                        ToolTipProperties.Text="Permanently delete this custom prompt" />
+                                                <Button Grid.Column="1" Style="{StaticResource SecondaryBtn}" Text="Save"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.SavePromptCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="Cancel"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.CancelEditPromptCommand}"
+                                                        CommandParameter="{Binding .}"
+                                                        TextColor="{StaticResource TextSecondary}" />
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </Border>
+
+                                </VerticalStackLayout>
+                            </Border>
+
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- Add new prompt + Reset all buttons -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,24">
+                    <Button Grid.Column="0" Text="+ New prompt"
+                            Style="{StaticResource SecondaryBtn}"
+                            Command="{Binding AddNewPromptCommand}"
+                            ToolTipProperties.Text="Create a new custom AI prompt" />
+                    <Button Grid.Column="1" Text="↺ Reset all"
+                            Style="{StaticResource ResetPromptsBtn}"
+                            x:Name="ResetPromptsButton"
+                            ToolTipProperties.Text="Delete all custom prompts and restore the 6 built-in defaults" />
+                </Grid>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ═══════════════════════════════════════ BOTTOM DONE BAR -->
+        <Border Grid.Row="1"
+                BackgroundColor="{StaticResource BgSmartBar}"
+                StrokeThickness="1"
+                Stroke="{StaticResource BorderDefault}"
+                Padding="16,10,16,44">
+            <Button Text="← Done — return to chunking"
+                    Style="{StaticResource SecondaryBtn}"
+                    Command="{Binding GoBackCommand}"
+                    ToolTipProperties.Text="Return to the main view. Your prompt selection is remembered." />
+        </Border>
+
+    </Grid>
+</ContentPage>

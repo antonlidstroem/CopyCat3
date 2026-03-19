@@ -25,17 +25,20 @@
                     <!-- ── REPOSITORY CARD ── -->
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout Spacing="0">
-                            <!-- Header: title + C6 Save workspace button -->
+
+                            <!-- Header -->
                             <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                                <Label Grid.Column="0" Text="REPOSITORY" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                                <Label Grid.Column="0" Text="REPOSITORY" Style="{StaticResource SectionTitle}"
+                                       Margin="0" VerticalOptions="Center" />
                                 <Button Grid.Column="1"
                                         Text="💾 Save workspace"
                                         Style="{StaticResource SmallIconBtn}"
                                         Command="{Binding SaveWorkspaceCommand}"
                                         IsVisible="{Binding HasSelectedRepo}"
-                                        ToolTipProperties.Text="Save current filters, token limit and prompt as defaults for this repo" />
+                                        ToolTipProperties.Text="Save current file types, excluded folders, token limit and active AI prompt as defaults for this repository. Restores automatically on next selection." />
                             </Grid>
 
+                            <!-- URL field -->
                             <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4" ColumnSpacing="6">
                                 <Label Grid.Column="0" Text="GitHub URL or local path"
                                        Style="{StaticResource FieldLabel}" Margin="0" VerticalOptions="Center" />
@@ -43,7 +46,7 @@
                                        TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                              CommandParameter="Paste a GitHub repo URL (https://github.com/owner/repo) or a local folder path. On Android/iOS you can share a URL directly from your browser to CopyCat." />
+                                                              CommandParameter="Paste a GitHub repo URL (https://github.com/owner/repo) or a local folder path (e.g. C:\Projects\MyApp or /Users/me/code). Tap 📋 to paste from clipboard. On Android/iOS you can also share a URL directly from your browser." />
                                     </Label.GestureRecognizers>
                                 </Label>
                             </Grid>
@@ -57,14 +60,16 @@
                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                                     <Button Grid.Column="1" Style="{StaticResource IconBtn}" Text="✕"
                                             Command="{Binding ClearUrlCommand}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTipProperties.Text="Clear URL field" />
                                     <Button Grid.Column="2" Style="{StaticResource IconBtn}" Text="📋"
                                             Command="{Binding PasteUrlCommand}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTipProperties.Text="Paste URL from clipboard" />
                                 </Grid>
                             </Border>
 
-                            <!-- Saved repos -->
+                            <!-- ── Saved repos — BindableLayout replaces CollectionView (Android fix) -->
                             <VerticalStackLayout IsVisible="{Binding HasSavedRepos}" Spacing="0">
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,6">
                                     <Label Grid.Column="0" Text="Recent repositories"
@@ -72,16 +77,22 @@
                                     <Button Grid.Column="1" Style="{StaticResource SmallIconBtn}" Text="✎  Rename"
                                             Command="{Binding RenameSelectedRepoCommand}"
                                             IsVisible="{Binding HasSelectedRepo}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTipProperties.Text="Give this repository a friendly display name" />
                                     <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="✕"
                                             Command="{Binding ClearSelectedRepoCommand}"
                                             IsVisible="{Binding HasSelectedRepo}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTipProperties.Text="Deselect this repository" />
                                 </Grid>
+
+                                <!-- FIX: BindableLayout replaces CollectionView inside ScrollView (Android layout bug) -->
                                 <Border Style="{StaticResource SavedReposListBorder}">
-                                    <CollectionView ItemsSource="{Binding SavedRepos}" SelectionMode="None"
-                                                    MaximumHeightRequest="220">
-                                        <CollectionView.ItemTemplate>
+                                    <VerticalStackLayout Spacing="0">
+                                        <BindableLayout.ItemsSource>
+                                            <Binding Path="SavedRepos" />
+                                        </BindableLayout.ItemsSource>
+                                        <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="models:SavedRepo">
                                                 <Grid ColumnDefinitions="*,Auto,Auto" Padding="10,8">
                                                     <Label Grid.Column="0" Text="{Binding DisplayName}"
@@ -92,21 +103,21 @@
                                                                 CommandParameter="{Binding .}" />
                                                         </Label.GestureRecognizers>
                                                     </Label>
-                                                    <!-- C6: workspace indicator dot -->
                                                     <Label Grid.Column="1"
                                                            Text="●"
                                                            TextColor="{StaticResource AccentSecond}"
                                                            FontSize="8"
                                                            VerticalOptions="Center"
                                                            IsVisible="{Binding HasWorkspace}"
-                                                           ToolTipProperties.Text="Workspace saved" />
+                                                           ToolTipProperties.Text="Workspace settings saved for this repo" />
                                                     <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="🗑"
                                                             Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.DeleteRepoCommand}"
-                                                            CommandParameter="{Binding .}" />
+                                                            CommandParameter="{Binding .}"
+                                                            ToolTipProperties.Text="Remove from recent list" />
                                                 </Grid>
                                             </DataTemplate>
-                                        </CollectionView.ItemTemplate>
-                                    </CollectionView>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
                                 </Border>
                             </VerticalStackLayout>
 
@@ -119,7 +130,7 @@
                                        FontSize="16" VerticalOptions="Center">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                              CommandParameter="Tap the branch field to open the picker. Selecting a branch triggers file-type auto-detection." />
+                                                              CommandParameter="Tap the branch field to open the branch picker. CopyCat tries main → master → develop as fallbacks if the selected branch doesn't exist. Selecting a branch triggers automatic file-type detection." />
                                     </Label.GestureRecognizers>
                                 </Label>
                             </Grid>
@@ -179,7 +190,8 @@
                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                                     <Button Grid.Column="1" Style="{StaticResource IconBtn}" Text="🗑"
                                             Command="{Binding ClearTokenCommand}"
-                                            IsVisible="{Binding TokenIsSaved}" />
+                                            IsVisible="{Binding TokenIsSaved}"
+                                            ToolTipProperties.Text="Remove saved token from secure storage" />
                                 </Grid>
                             </Border>
                         </VerticalStackLayout>
@@ -194,18 +206,19 @@
                                     <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
                                         <Label.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                                  CommandParameter="Green border = included. Tap Auto to detect types from the repo. For local paths, Auto scans extensions directly." />
+                                                                  CommandParameter="Green chip = included in chunking. Grey chip = excluded. Tap 🔍 Auto to scan the repo and enable matching types automatically. Tap individual chips to toggle them. Tap 'Toggle all' to flip all at once." />
                                         </Label.GestureRecognizers>
                                     </Label>
                                 </HorizontalStackLayout>
-                                <!-- C1: Auto button now shows for local paths too -->
                                 <Button Grid.Column="1" Style="{StaticResource AutoDetectBtn}" Text="🔍 Auto"
                                         Command="{Binding AutoDetectFileTypesCommand}"
                                         IsVisible="{Binding CanAutoDetect}"
-                                        IsEnabled="{Binding IsAutoDetecting, Converter={StaticResource InverseBool}}" />
+                                        IsEnabled="{Binding IsAutoDetecting, Converter={StaticResource InverseBool}}"
+                                        ToolTipProperties.Text="Scan the repository to detect which file types are present, then enable matching filters automatically" />
                                 <Button Grid.Column="2" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
                                         Command="{Binding ToggleAllFileTypesCommand}"
-                                        IsVisible="{Binding IsFileTypesExpanded}" />
+                                        IsVisible="{Binding IsFileTypesExpanded}"
+                                        ToolTipProperties.Text="Enable or disable all file type filters at once" />
                                 <Label Grid.Column="3"
                                        Text="{Binding IsFileTypesExpanded, Converter={StaticResource ExpandArrowConv}}"
                                        TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
@@ -256,13 +269,14 @@
                                     <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
                                         <Label.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                                  CommandParameter="Red border = folder excluded. Green border = included. Tap to toggle. Add custom folder names below." />
+                                                                  CommandParameter="Red chip = folder excluded from chunking. Green = included. Tap any chip to toggle. Type a custom folder name in the field below and tap + Add. Common folders like bin, obj, node_modules are excluded by default." />
                                         </Label.GestureRecognizers>
                                     </Label>
                                 </HorizontalStackLayout>
                                 <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
                                         Command="{Binding ToggleAllFolderFiltersCommand}"
-                                        IsVisible="{Binding IsFoldersExpanded}" />
+                                        IsVisible="{Binding IsFoldersExpanded}"
+                                        ToolTipProperties.Text="Flip all folder exclusions on or off at once" />
                                 <Label Grid.Column="2"
                                        Text="{Binding IsFoldersExpanded, Converter={StaticResource ExpandArrowConv}}"
                                        TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
@@ -303,13 +317,14 @@
                                 <Border Grid.Column="0" Style="{StaticResource InputBorder}">
                                     <Entry Style="{StaticResource InputEntry}"
                                            Text="{Binding CustomFolderInput}"
-                                           Placeholder="Add folder name…"
+                                           Placeholder="Add folder name… (e.g. migrations)"
                                            ReturnType="Done" ReturnCommand="{Binding AddCustomFolderCommand}"
                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
                                 </Border>
                                 <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="+ Add"
                                         Command="{Binding AddCustomFolderCommand}"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        ToolTipProperties.Text="Add this folder name to the exclusion list" />
                             </Grid>
                         </VerticalStackLayout>
                     </Border>
@@ -323,13 +338,14 @@
                                     <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
                                         <Label.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                                  CommandParameter="Red border = pattern active (files matching are excluded). Enter comma-separated glob patterns, e.g. *Test*, *Spec*. Browse fetched files below to exclude by name." />
+                                                                  CommandParameter="Red chip = pattern active (files whose names match are excluded). Use glob patterns with * wildcards. Examples: *Test* excludes TestHelper.cs, *Spec* excludes UserSpec.ts, *.min.* excludes app.min.js, Program.cs excludes that exact file. Enter comma-separated patterns and tap + Add." />
                                         </Label.GestureRecognizers>
                                     </Label>
                                 </HorizontalStackLayout>
                                 <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
                                         Command="{Binding ToggleAllFilePatternsCommand}"
-                                        IsVisible="{Binding IsFilePatternsExpanded}" />
+                                        IsVisible="{Binding IsFilePatternsExpanded}"
+                                        ToolTipProperties.Text="Enable or disable all file pattern exclusions at once" />
                                 <Label Grid.Column="2"
                                        Text="{Binding IsFilePatternsExpanded, Converter={StaticResource ExpandArrowConv}}"
                                        TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
@@ -375,14 +391,14 @@
                                     </Border>
                                     <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="+ Add"
                                             Command="{Binding AddCustomPatternCommand}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTipProperties.Text="Add pattern(s) to the exclusion list. Comma-separate multiple patterns." />
                                 </Grid>
 
-                                <!-- C4: Fetched file browser — only visible after a fetch -->
+                                <!-- Fetched file browser — visible only after a fetch -->
                                 <VerticalStackLayout IsVisible="{Binding HasFetchedFiles}" Margin="0,12,0,0" Spacing="0">
                                     <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Opacity="0.5" Margin="0,0,0,8" />
 
-                                    <!-- Browser header -->
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                         <Label Grid.Column="0"
                                                Text="{Binding FetchedFilesCountLabel}"
@@ -399,47 +415,40 @@
                                         </Grid.GestureRecognizers>
                                     </Grid>
 
-                                    <Label Text="Tap ○/✕ to exclude individual files from chunking"
+                                    <Label Text="Tap the ○/✕ icon to include or exclude individual files from chunking. Excluded files are highlighted in red."
                                            Style="{StaticResource HintLabel}" Margin="0,2,0,6"
                                            IsVisible="{Binding IsFetchedFilesExpanded}" />
 
-                                    <!-- File list — grouped by Folder -->
+                                    <!-- FIX: HeightRequest on ScrollView so Android can measure it.
+                                         BindableLayout replaces CollectionView — avoids nested CollectionView+ScrollView bug. -->
                                     <Border IsVisible="{Binding IsFetchedFilesExpanded}"
                                             BackgroundColor="{StaticResource BgPreview}"
                                             StrokeThickness="1" Stroke="{StaticResource BorderDefault}"
-                                            StrokeShape="RoundRectangle 8" Padding="0"
-                                            MaximumHeightRequest="400">
-                                        <ScrollView Orientation="Vertical">
+                                            StrokeShape="RoundRectangle 8" Padding="0">
+                                        <ScrollView Orientation="Vertical" HeightRequest="300">
                                             <VerticalStackLayout Spacing="0">
-                                                <CollectionView ItemsSource="{Binding FetchedFiles}"
-                                                                SelectionMode="None">
-                                                    <CollectionView.GroupHeaderTemplate>
-                                                        <DataTemplate>
-                                                            <Label Text="{Binding Key}"
-                                                                   Style="{StaticResource FetchedFileGroupHeader}"
-                                                                   Padding="12,6,12,2" />
-                                                        </DataTemplate>
-                                                    </CollectionView.GroupHeaderTemplate>
-                                                    <CollectionView.ItemTemplate>
-                                                        <DataTemplate x:DataType="models:FetchedFileEntry">
-                                                            <Grid ColumnDefinitions="Auto,*"
-                                                                  Padding="12,5"
-                                                                  BackgroundColor="{Binding RowBackground}">
-                                                                <!-- Exclude/include toggle -->
-                                                                <Label Grid.Column="0"
-                                                                       Text="{Binding ExcludeIcon}"
-                                                                       TextColor="{Binding ExcludeIconColor}"
-                                                                       FontSize="13" VerticalOptions="Center"
-                                                                       Margin="0,0,10,0">
-                                                                    <Label.GestureRecognizers>
-                                                                        <TapGestureRecognizer
-                                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFetchedFileExclusionCommand}"
-                                                                            CommandParameter="{Binding .}" />
-                                                                    </Label.GestureRecognizers>
-                                                                </Label>
-                                                                <!-- File name -->
-                                                                <Label Grid.Column="1"
-                                                                       Text="{Binding FileName}"
+                                                <BindableLayout.ItemsSource>
+                                                    <Binding Path="FetchedFiles" />
+                                                </BindableLayout.ItemsSource>
+                                                <BindableLayout.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:FetchedFileEntry">
+                                                        <Grid ColumnDefinitions="Auto,*"
+                                                              Padding="12,5"
+                                                              BackgroundColor="{Binding RowBackground}">
+                                                            <Label Grid.Column="0"
+                                                                   Text="{Binding ExcludeIcon}"
+                                                                   TextColor="{Binding ExcludeIconColor}"
+                                                                   FontSize="13" VerticalOptions="Center"
+                                                                   Margin="0,0,10,0"
+                                                                   ToolTipProperties.Text="Tap to toggle file exclusion">
+                                                                <Label.GestureRecognizers>
+                                                                    <TapGestureRecognizer
+                                                                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFetchedFileExclusionCommand}"
+                                                                        CommandParameter="{Binding .}" />
+                                                                </Label.GestureRecognizers>
+                                                            </Label>
+                                                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
+                                                                <Label Text="{Binding FileName}"
                                                                        Style="{StaticResource FetchedFileRowLabel}">
                                                                     <Label.GestureRecognizers>
                                                                         <TapGestureRecognizer
@@ -447,10 +456,13 @@
                                                                             CommandParameter="{Binding .}" />
                                                                     </Label.GestureRecognizers>
                                                                 </Label>
-                                                            </Grid>
-                                                        </DataTemplate>
-                                                    </CollectionView.ItemTemplate>
-                                                </CollectionView>
+                                                                <Label Text="{Binding Folder}"
+                                                                       TextColor="{StaticResource TextDim}"
+                                                                       FontSize="10" />
+                                                            </VerticalStackLayout>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </BindableLayout.ItemTemplate>
                                             </VerticalStackLayout>
                                         </ScrollView>
                                     </Border>
@@ -459,164 +471,21 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- ── AI PROMPTS ── -->
+                    <!-- ── AI PROMPTS — compact card (full management on PromptsPage) ── -->
                     <Border Style="{StaticResource Card}">
-                        <VerticalStackLayout Spacing="0">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
-                                    <Label Text="AI PROMPTS" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
-                                    <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
-                                        <Label.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                                  CommandParameter="Tap Zone A (left) of a prompt card to select it — it prepends automatically when you copy. Amber border = edited or custom. Teal = pristine built-in. ↺ resets one built-in to factory text." />
-                                        </Label.GestureRecognizers>
-                                    </Label>
-                                </HorizontalStackLayout>
-                                <Label Grid.Column="1"
-                                       Text="{Binding IsPromptsExpanded, Converter={StaticResource ExpandArrowConv}}"
-                                       TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
-                                    <Label.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding TogglePromptsCommand}" />
-                                    </Label.GestureRecognizers>
-                                </Label>
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding TogglePromptsCommand}" />
-                                </Grid.GestureRecognizers>
-                            </Grid>
-
-                            <VerticalStackLayout IsVisible="{Binding IsPromptsExpanded}" Spacing="0">
-                                <CollectionView ItemsSource="{Binding Prompts}" SelectionMode="None">
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate x:DataType="models:PromptItem">
-                                            <!-- C2: Prompt card — three zones -->
-                                            <Border Style="{StaticResource PromptCardBorder}"
-                                                    Stroke="{Binding IsModifiedOrCustom, Converter={StaticResource PromptBorderConv}}"
-                                                    StrokeThickness="{Binding CardBorderThickness}">
-                                                <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,90">
-
-                                                    <!-- ZONE A — Select area (tap = toggle IsSelectedForShare) -->
-                                                    <Grid Grid.Row="0" Grid.Column="0"
-                                                          BackgroundColor="{Binding ZoneABackground}"
-                                                          Padding="12,10">
-                                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                                            <Label Text="{Binding Title}" Style="{StaticResource PromptTitleLabel}" />
-                                                            <!-- Two-line preview (hidden when editing or previewing) -->
-                                                            <Label Text="{Binding PreviewText}"
-                                                                   Style="{StaticResource PromptPreviewLabel2}"
-                                                                   IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}" />
-                                                        </VerticalStackLayout>
-                                                        <Grid.GestureRecognizers>
-                                                            <TapGestureRecognizer
-                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SelectPromptForShareCommand}"
-                                                                CommandParameter="{Binding .}" />
-                                                        </Grid.GestureRecognizers>
-                                                    </Grid>
-
-                                                    <!-- Zone A/B separator -->
-                                                    <BoxView Grid.Row="0" Grid.Column="0"
-                                                             HorizontalOptions="End"
-                                                             Style="{StaticResource CardZoneSeparatorView}" />
-
-                                                    <!-- ZONE B — Copy area (tap buttons only, never affects selection) -->
-                                                    <VerticalStackLayout Grid.Row="0" Grid.Column="1"
-                                                                         Spacing="4" VerticalOptions="Center"
-                                                                         HorizontalOptions="Center"
-                                                                         Padding="0,8">
-                                                        <Button Style="{StaticResource SmallIconBtn}" Text="📋"
-                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyPromptCommand}"
-                                                                CommandParameter="{Binding .}"
-                                                                ToolTipProperties.Text="Copy prompt text" />
-                                                        <Button Style="{StaticResource SmallIconBtn}" Text="✎"
-                                                                IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}"
-                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.StartEditPromptCommand}"
-                                                                CommandParameter="{Binding .}"
-                                                                ToolTipProperties.Text="Edit this prompt" />
-                                                        <Button Style="{StaticResource SmallIconBtn}" Text="↺"
-                                                                IsVisible="{Binding IsBuiltIn}"
-                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ResetSinglePromptCommand}"
-                                                                CommandParameter="{Binding .}"
-                                                                ToolTipProperties.Text="Reset to factory default" />
-                                                    </VerticalStackLayout>
-
-                                                    <!-- ZONE C — Expand strip (full width, always visible) -->
-                                                    <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                                            Style="{StaticResource CardZoneCBorder}">
-                                                        <Grid ColumnDefinitions="*,Auto" HeightRequest="36">
-                                                            <Label Grid.Column="0"
-                                                                   Text="{Binding PreviewToggleIcon}"
-                                                                   TextColor="{StaticResource TextMuted}"
-                                                                   FontSize="11" VerticalOptions="Center"
-                                                                   HorizontalTextAlignment="Center" />
-                                                            <Label Grid.Column="1"
-                                                                   Text="Full text"
-                                                                   TextColor="{StaticResource TextDim}"
-                                                                   FontSize="10" VerticalOptions="Center"
-                                                                   Margin="0,0,14,0" />
-                                                            <Grid.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePromptPreviewCommand}"
-                                                                    CommandParameter="{Binding .}" />
-                                                            </Grid.GestureRecognizers>
-                                                        </Grid>
-                                                    </Border>
-
-                                                    <!-- Full text preview (expands below Zone C) -->
-                                                    <!-- Renders as additional rows when IsPreviewExpanded -->
-                                                </Grid>
-
-                                                <!-- Full preview panel — below the 3-zone grid -->
-                                                <Border IsVisible="{Binding IsPreviewExpanded}"
-                                                        BackgroundColor="{StaticResource BgPreview}"
-                                                        StrokeThickness="0" Padding="12,8,12,12">
-                                                    <Label Text="{Binding Content}" Style="{StaticResource PromptPreviewLabel}" />
-                                                </Border>
-
-                                                <!-- Edit panel -->
-                                                <Border Style="{StaticResource PromptEditBorder}"
-                                                        IsVisible="{Binding IsEditing}">
-                                                    <VerticalStackLayout Spacing="8">
-                                                        <Border Style="{StaticResource InputBorder}">
-                                                            <Entry Style="{StaticResource InputEntry}"
-                                                                   Text="{Binding EditTitle}"
-                                                                   Placeholder="Prompt title…" />
-                                                        </Border>
-                                                        <Border Style="{StaticResource InputBorder}">
-                                                            <Editor Style="{StaticResource InlineEditor}"
-                                                                    Text="{Binding EditContent}"
-                                                                    Placeholder="Prompt text…" />
-                                                        </Border>
-                                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                                            <Button Grid.Column="0" Style="{StaticResource SmallIconBtn}"
-                                                                    Text="🗑 Delete"
-                                                                    IsVisible="{Binding IsBuiltIn, Converter={StaticResource InverseBool}}"
-                                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.DeletePromptCommand}"
-                                                                    CommandParameter="{Binding .}"
-                                                                    TextColor="{StaticResource TextError}" />
-                                                            <Button Grid.Column="1" Style="{StaticResource SecondaryBtn}" Text="Save"
-                                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SavePromptCommand}"
-                                                                    CommandParameter="{Binding .}" />
-                                                            <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="Cancel"
-                                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CancelEditPromptCommand}"
-                                                                    CommandParameter="{Binding .}"
-                                                                    TextColor="{StaticResource TextSecondary}" />
-                                                        </Grid>
-                                                    </VerticalStackLayout>
-                                                </Border>
-                                            </Border>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                </CollectionView>
-
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,0">
-                                    <Button Grid.Column="0" Text="+ New prompt"
-                                            Style="{StaticResource SecondaryBtn}"
-                                            Command="{Binding AddNewPromptCommand}" />
-                                    <Button Grid.Column="1" Text="↺ Reset all"
-                                            Style="{StaticResource ResetPromptsBtn}"
-                                            x:Name="ResetPromptsButton" />
-                                </Grid>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="2">
+                                <Label Text="AI PROMPT" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                                <Label Text="{Binding SelectedPromptLabel}"
+                                       TextColor="{StaticResource AccentSecond}"
+                                       FontSize="12" LineBreakMode="TailTruncation" />
                             </VerticalStackLayout>
-                        </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="⚙ Manage Prompts"
+                                    Style="{StaticResource ToggleAllBtn}"
+                                    Command="{Binding NavigateToPromptsPageCommand}"
+                                    ToolTipProperties.Text="Open the AI Prompt Library — select, edit or create prompts that are prepended to every chunk you copy" />
+                        </Grid>
                     </Border>
 
                     <!-- ── TOKEN SLIDER ── -->
@@ -628,7 +497,7 @@
                                     <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
                                         <Label.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding ShowInfoCommand}"
-                                                                  CommandParameter="~4 chars = 1 token. Larger chunks = fewer pastes but may exceed AI context windows. Recommended: 16K for GPT-4 Turbo, Claude 3+, Gemini 1.5." />
+                                                                  CommandParameter="Controls how many tokens fit in one chunk (~4 characters = 1 token). Fewer tokens = more chunks to paste, but each paste is smaller. More tokens = fewer pastes but may exceed your AI's context window. Recommended: 16K for GPT-4 Turbo, Claude 3+, Gemini 1.5. Use 32K only for models with large context windows." />
                                         </Label.GestureRecognizers>
                                     </Label>
                                 </HorizontalStackLayout>
@@ -637,14 +506,22 @@
                                 </Border>
                             </Grid>
                             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6" Margin="0,0,0,8">
-                                <Button Grid.Column="0" Text="4K"   Style="{StaticResource SliderPresetBtn}" Command="{Binding SetPresetTokensCommand}" CommandParameter="4000" />
-                                <Button Grid.Column="1" Text="8K"   Style="{StaticResource SliderPresetBtn}" Command="{Binding SetPresetTokensCommand}" CommandParameter="8000" />
-                                <Button Grid.Column="2" Text="★ 16K" Style="{StaticResource SliderPresetBtn}" Command="{Binding SetPresetTokensCommand}" CommandParameter="16000" />
-                                <Button Grid.Column="3" Text="32K"  Style="{StaticResource SliderPresetBtn}" Command="{Binding SetPresetTokensCommand}" CommandParameter="32000" />
+                                <Button Grid.Column="0" Text="4K"    Style="{StaticResource SliderPresetBtn}"
+                                        Command="{Binding SetPresetTokensCommand}" CommandParameter="4000"
+                                        ToolTipProperties.Text="4,096 tokens — fits GPT-3.5 Turbo and basic AI chat interfaces" />
+                                <Button Grid.Column="1" Text="8K"    Style="{StaticResource SliderPresetBtn}"
+                                        Command="{Binding SetPresetTokensCommand}" CommandParameter="8000"
+                                        ToolTipProperties.Text="8,192 tokens — good balance for GPT-4 (8K context)" />
+                                <Button Grid.Column="2" Text="★ 16K" Style="{StaticResource SliderPresetBtn}"
+                                        Command="{Binding SetPresetTokensCommand}" CommandParameter="16000"
+                                        ToolTipProperties.Text="16,384 tokens — RECOMMENDED for GPT-4 Turbo, Claude 3+, Gemini 1.5" />
+                                <Button Grid.Column="3" Text="32K"   Style="{StaticResource SliderPresetBtn}"
+                                        Command="{Binding SetPresetTokensCommand}" CommandParameter="32000"
+                                        ToolTipProperties.Text="32,768 tokens — maximum; only use with large-context models (Claude Opus, GPT-4 32K)" />
                             </Grid>
                             <Label Text="{Binding SliderWarningText}" TextColor="{Binding SliderWarningColor}"
                                    Style="{StaticResource SliderWarningLabel}" />
-                            <Slider Minimum="1000" Maximum="32000" Value="{Binding MaxTokensPerChunk}"
+                            <Slider Minimum="1000" Maximum="32000" Value="{Binding MaxTokensPerChunk, Mode=TwoWay}"
                                     MinimumTrackColor="{StaticResource SliderTrackActive}"
                                     MaximumTrackColor="{StaticResource SliderTrackInactive}"
                                     ThumbColor="{StaticResource SliderThumb}" HeightRequest="40"
@@ -670,6 +547,7 @@
                      ════════════════════════════════════════════════════ -->
                 <VerticalStackLayout IsVisible="{Binding IsResultsMode}" Spacing="0">
 
+                    <!-- Busy indicator -->
                     <VerticalStackLayout IsVisible="{Binding IsBusy}" HorizontalOptions="Center"
                                          Spacing="10" Margin="0,0,0,10">
                         <ActivityIndicator IsRunning="{Binding IsBusy}"
@@ -709,6 +587,24 @@
                         </Grid>
                     </Border>
 
+                    <!-- Active AI Prompt card — shown after chunking -->
+                    <Border Style="{StaticResource Card}" IsVisible="{Binding HasChunks}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="2">
+                                <Label Text="AI PROMPT" Style="{StaticResource SectionTitle}" Margin="0" />
+                                <Label Text="{Binding SelectedPromptLabel}"
+                                       TextColor="{StaticResource AccentSecond}"
+                                       FontSize="12" LineBreakMode="TailTruncation"
+                                       MaxLines="1" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="⚙"
+                                    Style="{StaticResource IconBtn}"
+                                    Command="{Binding NavigateToPromptsPageCommand}"
+                                    ToolTipProperties.Text="Open AI Prompt Library to select or edit prompts. The active prompt is prepended to every chunk you copy." />
+                        </Grid>
+                    </Border>
+
                     <!-- CHUNK LIST -->
                     <VerticalStackLayout IsVisible="{Binding HasChunks}" Spacing="0">
 
@@ -717,7 +613,8 @@
                                    Margin="0" VerticalOptions="Center" />
                             <Button Grid.Column="1" Text="{Binding SelectAllChunksLabel}"
                                     Style="{StaticResource ToggleAllBtn}"
-                                    Command="{Binding SelectAllChunksCommand}" />
+                                    Command="{Binding SelectAllChunksCommand}"
+                                    ToolTipProperties.Text="Select all chunks to copy or share multiple at once. Tap again to deselect all." />
                             <Label Grid.Column="2"
                                    Text="{Binding HasSelection, Converter={StaticResource SelectionHintConv}}"
                                    TextColor="{StaticResource TextMuted}" FontSize="11" VerticalOptions="Center" />
@@ -728,10 +625,11 @@
                             <Grid ColumnDefinitions="*,Auto">
                                 <Entry Grid.Column="0" Style="{StaticResource InputEntry}"
                                        Text="{Binding ChunkSearchText}"
-                                       Placeholder="Search chunks…" Margin="4,0,0,0" />
+                                       Placeholder="Search chunk titles and content…" Margin="4,0,0,0" />
                                 <Button Grid.Column="1" Style="{StaticResource IconBtn}" Text="✕"
                                         Command="{Binding ClearChunkSearchCommand}"
-                                        IsVisible="{Binding ChunkSearchText, Converter={StaticResource StringNotEmptyConv}}" />
+                                        IsVisible="{Binding ChunkSearchText, Converter={StaticResource StringNotEmptyConv}}"
+                                        ToolTipProperties.Text="Clear search filter" />
                             </Grid>
                         </Border>
 
@@ -740,10 +638,19 @@
                                Margin="0,0,0,6"
                                IsVisible="{Binding ChunkSearchText, Converter={StaticResource StringNotEmptyConv}}" />
 
-                        <!-- C2: CHUNK CARDS — three-zone layout -->
-                        <CollectionView ItemsSource="{Binding FilteredChunks}" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
+                        <!-- FIX: BindableLayout replaces CollectionView inside page ScrollView (Android bug).
+                             All chunks are rendered eagerly. Performance is acceptable because:
+                             - Chunks start collapsed (IsPreviewExpanded = false)
+                             - Heavy file content is only rendered when the user expands a card
+                             - The SequenceEqual optimization in RefreshFilteredChunks prevents
+                               unnecessary clears on every keystroke in the search box. -->
+                        <VerticalStackLayout Spacing="0">
+                            <BindableLayout.ItemsSource>
+                                <Binding Path="FilteredChunks" />
+                            </BindableLayout.ItemsSource>
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:CodeChunk">
+
                                     <Border Style="{StaticResource ChunkBorder}"
                                             Stroke="{Binding CardBorderColor}"
                                             StrokeThickness="{Binding CardBorderThickness}">
@@ -752,7 +659,8 @@
                                         </Border.Behaviors>
 
                                         <VerticalStackLayout Spacing="0">
-                                            <!-- Three-zone grid: RowDef *,36 — ColDef *,90 -->
+
+                                            <!-- Three-zone grid -->
                                             <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,90">
 
                                                 <!-- ZONE A — Select (tap = toggle selection) -->
@@ -772,12 +680,13 @@
                                                         <Label Grid.Row="0" Grid.Column="1"
                                                                Text="{Binding DisplayLabel}"
                                                                Style="{StaticResource ChunkTitleLabel}" />
-                                                        <!-- Token count + C3 warning icon -->
+                                                        <!-- Token count + warning icon -->
                                                         <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="0">
                                                             <Label Text="{Binding SubLabel}" Style="{StaticResource ChunkSubLabel}" />
                                                             <Label Text="{Binding ChunkWarningIcon}"
                                                                    Style="{StaticResource ChunkWarningLabelStyle}"
-                                                                   IsVisible="{Binding ChunkWarningIcon, Converter={StaticResource StringNotEmptyConv}}" />
+                                                                   IsVisible="{Binding ChunkWarningIcon, Converter={StaticResource StringNotEmptyConv}}"
+                                                                   ToolTipProperties.Text="⛔ &gt;128K — exceeds most AI context windows&#10;⚠️ &gt;32K — too large for GPT-3.5&#10;ℹ️ &gt;16K — fine for GPT-4 Turbo, Claude, Gemini" />
                                                         </HorizontalStackLayout>
                                                     </Grid>
                                                     <Grid.GestureRecognizers>
@@ -807,7 +716,7 @@
                                                             MinimumWidthRequest="68"
                                                             Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.CopyChunkCommand}"
                                                             CommandParameter="{Binding .}"
-                                                            ToolTipProperties.Text="Copy this chunk to clipboard" />
+                                                            ToolTipProperties.Text="Copy this chunk (with active AI prompt if selected) to clipboard" />
                                                 </VerticalStackLayout>
 
                                                 <!-- ZONE C — Expand strip -->
@@ -833,62 +742,91 @@
                                                 </Border>
                                             </Grid>
 
-                                            <!-- Expanded file entries (below all three zones) -->
+                                            <!-- Expanded file entries -->
                                             <VerticalStackLayout IsVisible="{Binding IsPreviewExpanded}" Spacing="0">
-                                                <BindableLayout.ItemsSource><Binding Path="FileEntries" /></BindableLayout.ItemsSource>
-                                                <BindableLayout.ItemTemplate>
-                                                    <DataTemplate x:DataType="models:ChunkFile">
-                                                        <VerticalStackLayout Spacing="0">
-                                                            <Grid ColumnDefinitions="Auto,*,Auto" Padding="12,6"
-                                                                  BackgroundColor="{Binding RowBackground}">
-                                                                <Label Grid.Column="0" Text="{Binding ExcludeIcon}"
-                                                                       TextColor="{Binding ExcludeIconColor}"
-                                                                       FontSize="13" VerticalOptions="Center" Margin="0,0,8,0">
-                                                                    <Label.GestureRecognizers>
-                                                                        <TapGestureRecognizer
-                                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileEntryExclusionCommand}"
-                                                                            CommandParameter="{Binding .}" />
-                                                                    </Label.GestureRecognizers>
-                                                                </Label>
-                                                                <Label Grid.Column="1" Text="{Binding FileName}"
-                                                                       TextColor="{StaticResource TextSecondary}"
-                                                                       FontSize="12" FontFamily="OpenSansSemibold"
-                                                                       VerticalOptions="Center">
-                                                                    <Label.GestureRecognizers>
-                                                                        <TapGestureRecognizer
-                                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileCodeCommand}"
-                                                                            CommandParameter="{Binding .}" />
-                                                                    </Label.GestureRecognizers>
-                                                                </Label>
-                                                                <Label Grid.Column="2" Text="{Binding ExpandIcon}"
-                                                                       TextColor="{StaticResource TextMuted}"
-                                                                       FontSize="11" VerticalOptions="Center" Margin="0,0,4,0">
-                                                                    <Label.GestureRecognizers>
-                                                                        <TapGestureRecognizer
-                                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileCodeCommand}"
-                                                                            CommandParameter="{Binding .}" />
-                                                                    </Label.GestureRecognizers>
-                                                                </Label>
-                                                            </Grid>
-                                                            <ScrollView IsVisible="{Binding IsCodeExpanded}"
-                                                                        Orientation="Horizontal"
-                                                                        MaximumHeightRequest="240"
-                                                                        BackgroundColor="{StaticResource BgApp}">
-                                                                <Label Text="{Binding Content}"
-                                                                       FontFamily="Courier New" FontSize="11"
-                                                                       TextColor="{StaticResource TextMuted}"
-                                                                       LineBreakMode="NoWrap" Padding="14,8" />
-                                                            </ScrollView>
-                                                            <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Opacity="0.4" />
-                                                        </VerticalStackLayout>
-                                                    </DataTemplate>
-                                                </BindableLayout.ItemTemplate>
+
+                                                <!-- File list header with select/deselect all -->
+                                                <Grid ColumnDefinitions="*,Auto,Auto" Padding="12,6,8,2">
+                                                    <Label Grid.Column="0" Text="FILES IN THIS CHUNK"
+                                                           Style="{StaticResource SectionTitle}"
+                                                           Margin="0" VerticalOptions="Center" />
+                                                    <Button Grid.Column="1"
+                                                            Text="✓ All"
+                                                            Style="{StaticResource SmallIconBtn}"
+                                                            TextColor="{StaticResource AccentSecond}"
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.IncludeAllChunkFilesCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            ToolTipProperties.Text="Include all files in this chunk when copying" />
+                                                    <Button Grid.Column="2"
+                                                            Text="✕ All"
+                                                            Style="{StaticResource SmallIconBtn}"
+                                                            TextColor="{StaticResource TextError}"
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ExcludeAllChunkFilesCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            ToolTipProperties.Text="Exclude all files from this chunk — useful when you only want one file included" />
+                                                </Grid>
+
+                                                <!-- Per-file rows -->
+                                                <VerticalStackLayout Spacing="0">
+                                                    <BindableLayout.ItemsSource><Binding Path="FileEntries" /></BindableLayout.ItemsSource>
+                                                    <BindableLayout.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:ChunkFile">
+                                                            <VerticalStackLayout Spacing="0">
+                                                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="12,6"
+                                                                      BackgroundColor="{Binding RowBackground}">
+                                                                    <Label Grid.Column="0" Text="{Binding ExcludeIcon}"
+                                                                           TextColor="{Binding ExcludeIconColor}"
+                                                                           FontSize="13" VerticalOptions="Center" Margin="0,0,8,0"
+                                                                           ToolTipProperties.Text="Tap to include or exclude this file from copying">
+                                                                        <Label.GestureRecognizers>
+                                                                            <TapGestureRecognizer
+                                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileEntryExclusionCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                        </Label.GestureRecognizers>
+                                                                    </Label>
+                                                                    <Label Grid.Column="1" Text="{Binding FileName}"
+                                                                           TextColor="{StaticResource TextSecondary}"
+                                                                           FontSize="12" FontFamily="OpenSansSemibold"
+                                                                           VerticalOptions="Center">
+                                                                        <Label.GestureRecognizers>
+                                                                            <TapGestureRecognizer
+                                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileCodeCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                        </Label.GestureRecognizers>
+                                                                    </Label>
+                                                                    <Label Grid.Column="2" Text="{Binding ExpandIcon}"
+                                                                           TextColor="{StaticResource TextMuted}"
+                                                                           FontSize="11" VerticalOptions="Center" Margin="0,0,4,0"
+                                                                           ToolTipProperties.Text="Tap to show or hide the file's source code inline">
+                                                                        <Label.GestureRecognizers>
+                                                                            <TapGestureRecognizer
+                                                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFileCodeCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                        </Label.GestureRecognizers>
+                                                                    </Label>
+                                                                </Grid>
+                                                                <ScrollView IsVisible="{Binding IsCodeExpanded}"
+                                                                            Orientation="Horizontal"
+                                                                            HeightRequest="240"
+                                                                            BackgroundColor="{StaticResource BgApp}">
+                                                                    <Label Text="{Binding Content}"
+                                                                           FontFamily="Courier New" FontSize="11"
+                                                                           TextColor="{StaticResource TextMuted}"
+                                                                           LineBreakMode="NoWrap" Padding="14,8" />
+                                                                </ScrollView>
+                                                                <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Opacity="0.4" />
+                                                            </VerticalStackLayout>
+                                                        </DataTemplate>
+                                                    </BindableLayout.ItemTemplate>
+                                                </VerticalStackLayout>
+
                                             </VerticalStackLayout>
                                         </VerticalStackLayout>
                                     </Border>
+
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
 
                     </VerticalStackLayout>
 
@@ -912,7 +850,8 @@
                            TextColor="{StaticResource TextSecondary}" FontSize="13"
                            VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="2" />
                     <Button Grid.Column="2" Text="Abort" Style="{StaticResource SecondaryBtn}"
-                            FontSize="13" MinimumHeightRequest="40" Command="{Binding CancelCommand}" />
+                            FontSize="13" MinimumHeightRequest="40" Command="{Binding CancelCommand}"
+                            ToolTipProperties.Text="Cancel the current fetch or chunking operation" />
                 </Grid>
 
                 <!-- Copy progress -->
@@ -930,7 +869,8 @@
                         HeightRequest="90" ContentLayout="Top,0"
                         Command="{Binding FetchCommand}"
                         IsVisible="{Binding IsConfigurationMode}"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        ToolTipProperties.Text="Fetch the repository and split into token-bounded chunks ready for pasting into an AI chat" />
 
                 <!-- Results mode — no selection: Reset + Next + Edit Config -->
                 <Grid Grid.Row="1" ColumnDefinitions="*,Auto,*" ColumnSpacing="8"
@@ -938,26 +878,27 @@
                     <Button Grid.Column="0" Text="🔄  Reset"
                             Style="{StaticResource SecondaryBtn}"
                             Command="{Binding ResetCommand}"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                            ToolTipProperties.Text="Clear all results and return to configuration" />
                     <Button Grid.Column="1" Text="▶ Next"
                             Style="{StaticResource ChunkActionBtn}"
                             Command="{Binding CopyNextChunkCommand}"
                             IsVisible="{Binding HasChunks}"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                            ToolTipProperties.Text="Copy the next un-copied chunk" />
+                            ToolTipProperties.Text="Copy the next un-copied chunk to clipboard and advance the progress counter" />
                     <Button Grid.Column="2" Text="⚙  Edit Config"
                             Style="{StaticResource BackBtn}"
                             Command="{Binding BackToConfigurationCommand}"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                            ToolTipProperties.Text="Return to configuration to adjust filters without clearing results" />
                 </Grid>
 
-                <!-- Selection toolbar — ZIndex=1, declared last -->
+                <!-- Selection toolbar -->
                 <Border Grid.Row="1"
                         Style="{StaticResource SelectionToolbarBorder}"
                         IsVisible="{Binding HasSelection}"
                         ZIndex="1">
                     <Grid RowDefinitions="Auto,Auto" RowSpacing="2">
-                        <!-- Top row: count + actions -->
                         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
                             <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="1">
                                 <Label Text="{Binding ShareSelectedLabel}" Style="{StaticResource SelectionCountLabel}" />
@@ -966,20 +907,21 @@
                             <Button Grid.Column="1" Text="✕"
                                     Style="{StaticResource IconBtn}"
                                     Command="{Binding ClearSelectionCommand}"
-                                    ToolTipProperties.Text="Deselect all" />
+                                    ToolTipProperties.Text="Deselect all chunks" />
                             <Button Grid.Column="2" Text="⊕ Merge"
                                     Style="{StaticResource ToggleAllBtn}"
                                     Command="{Binding MergeSelectedCommand}"
                                     IsVisible="{Binding CanMerge}"
-                                    ToolTipProperties.Text="Merge selected chunks" />
+                                    ToolTipProperties.Text="Merge selected chunks into one combined chunk" />
                             <Button Grid.Column="3" Text="📋 Copy"
                                     Style="{StaticResource CopySelectedBtn}"
-                                    Command="{Binding CopySelectedCommand}" />
+                                    Command="{Binding CopySelectedCommand}"
+                                    ToolTipProperties.Text="Copy all selected chunks (with active AI prompt) to clipboard" />
                             <Button Grid.Column="4" Text="↗ Share"
                                     Style="{StaticResource ShareBtn}"
-                                    Command="{Binding ShareSelectedCommand}" />
+                                    Command="{Binding ShareSelectedCommand}"
+                                    ToolTipProperties.Text="Open the system share sheet to send selected chunks to another app" />
                         </Grid>
-                        <!-- C3: Token context warning row -->
                         <Label Grid.Row="1"
                                Text="{Binding SelectionWarningLabel}"
                                TextColor="{Binding SelectionWarningColor}"

@@ -26,33 +26,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _autoDetectDebounce;
 
     // ── Event-handler lists for explicit unsubscription ────────────────────
-
     private readonly List<(FileTypeFilter Filter, PropertyChangedEventHandler Handler)> _fileTypeHandlers = [];
     private readonly List<(CodeChunk      Chunk,  PropertyChangedEventHandler Handler)> _chunkHandlers    = [];
     private readonly List<(PromptItem     Prompt, PropertyChangedEventHandler Handler)> _promptHandlers   = [];
 
     // ── Events for code-behind dialogs ─────────────────────────────────────
-
     public event EventHandler<List<string>>?           BranchPickerRequested;
     public event EventHandler?                         TokenInfoRequested;
     public event EventHandler<SavedRepo>?              RepoRenameRequested;
     public event EventHandler<List<Models.SavedRepo>>? ShowHistoryRequested;
     public event EventHandler<string>?                 ShowInfoRequested;
 
-    // ── C1: Language → extension inference map ─────────────────────────────
+    /// <summary>Raised by NavigateToPromptsPageCommand — MainPage pushes PromptsPage.</summary>
+    public event EventHandler? NavigateToPromptsPageRequested;
 
-    /// <summary>
-    /// Maps GitHub Languages API display names to file extensions understood by FileTypeFilters.
-    /// Used by AutoDetectFileTypesAsync to infer project-file extensions (.csproj etc.)
-    /// that the ZIP scan never returns because GitHub does not classify them as languages.
-    /// </summary>
+    /// <summary>Raised by GoBackCommand inside PromptsPage — triggers PopAsync.</summary>
+    public event EventHandler? GoBackRequested;
+
+    // ── Language → extension inference map ────────────────────────────────
     private static readonly IReadOnlyDictionary<string, string[]> LanguageExtensionInference =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["C#"]         = [".csproj", ".xml"],
             ["TypeScript"] = [".json"],
             ["JavaScript"] = [".json"],
-            ["Python"]     = [],   // no required companion extensions
+            ["Python"]     = [],
             ["Java"]       = [],
             ["Kotlin"]     = [],
         };
@@ -82,7 +80,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(value)) return;
         if (IsBusy || IsAutoDetecting) return;
-        // C1: fire auto-detect for both GitHub and local paths
         if (string.IsNullOrWhiteSpace(RepoUrl)) return;
 
         _autoDetectDebounce?.Cancel();
@@ -102,11 +99,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isFileTypesExpanded;
     [ObservableProperty] private bool _isFoldersExpanded;
     [ObservableProperty] private bool _isFilePatternsExpanded;
-    [ObservableProperty] private bool _isPromptsExpanded = true;
     [ObservableProperty] private bool _isKeywordExpanded;
     [ObservableProperty] private bool _isFetchingBranches;
 
-    // C4: file browser toggle
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FetchedFilesCountLabel))]
     private bool _isFetchedFilesExpanded;
@@ -115,14 +110,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _customFolderInput  = string.Empty;
     [ObservableProperty] private string _customPatternInput = string.Empty;
 
-    // ── C5: FilteredChunks — ObservableCollection (fixes IEnumerable binding) ──
-
+    // ── FilteredChunks — ObservableCollection ─────────────────────────────
     private readonly ObservableCollection<CodeChunk> _filteredChunks = [];
 
     /// <summary>
-    /// C5 fix: ObservableCollection so CollectionView receives change notifications
-    /// and animates item add/remove. Rebuilt by RefreshFilteredChunks() whenever
-    /// Chunks or ChunkSearchText changes.
+    /// ObservableCollection so BindableLayout receives change notifications.
+    /// Rebuilt by RefreshFilteredChunks() whenever Chunks or ChunkSearchText changes.
     /// </summary>
     public ObservableCollection<CodeChunk> FilteredChunks => _filteredChunks;
 
@@ -146,23 +139,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnChunkSearchTextChanged(string _) => RefreshFilteredChunks();
 
-    private void RefreshFilteredChunks()
+    /// <summary>
+    /// Rebuilds FilteredChunks from Chunks filtered by ChunkSearchText.
+    /// Performance: skips rebuild when the result set is unchanged (SequenceEqual).
+    /// forceRebuild=true is used when Chunks itself has changed (after fetch or merge).
+    /// </summary>
+    private void RefreshFilteredChunks(bool forceRebuild = false)
     {
-        _filteredChunks.Clear();
         var src = string.IsNullOrWhiteSpace(ChunkSearchText)
             ? (IEnumerable<CodeChunk>)Chunks
             : Chunks.Where(c =>
                 c.DisplayLabel.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase) ||
                 c.Content.Contains(ChunkSearchText, StringComparison.OrdinalIgnoreCase));
-        foreach (var c in src) _filteredChunks.Add(c);
+
+        var newList = src.ToList();
+
+        if (!forceRebuild && _filteredChunks.SequenceEqual(newList))
+        {
+            OnPropertyChanged(nameof(ChunkSearchSummary));
+            return;
+        }
+
+        _filteredChunks.Clear();
+        foreach (var c in newList) _filteredChunks.Add(c);
         OnPropertyChanged(nameof(HasFilteredChunks));
         OnPropertyChanged(nameof(ChunkSearchSummary));
     }
 
     // ── Auto-detect state ──────────────────────────────────────────────────
 
-    [ObservableProperty]
-    private bool _isAutoDetecting;
+    [ObservableProperty] private bool _isAutoDetecting;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasAutoDetectStatus))]
@@ -170,10 +176,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasAutoDetectStatus => !string.IsNullOrEmpty(AutoDetectStatusText);
 
-    /// <summary>
-    /// C1 fix: Auto button now appears for both GitHub URLs and local paths.
-    /// The detection method is chosen inside AutoDetectFileTypesAsync.
-    /// </summary>
     public bool CanAutoDetect =>
         !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl);
 
@@ -215,7 +217,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ── C4: Fetched file browser ───────────────────────────────────────────
+    // ── AI Prompt compact display ──────────────────────────────────────────
+
+    /// <summary>One-line label shown in the compact prompt card.</summary>
+    public string SelectedPromptLabel =>
+        SelectedPrompt is not null
+            ? $"✓ {SelectedPrompt.Title}"
+            : "None selected — tap ⚙ Manage Prompts to choose one";
+
+    /// <summary>True when a prompt is actively selected for prepending to copies.</summary>
+    public bool HasSelectedPrompt => SelectedPrompt is not null;
+
+    // ── Fetched file browser ───────────────────────────────────────────────
 
     public string FetchedFilesCountLabel =>
         $"FETCHED FILES ({FetchedFiles.Count})";
@@ -315,7 +328,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasCopyProgress => !string.IsNullOrEmpty(CopyProgressLabel);
 
-    // ── C3: Multi-select token warnings ───────────────────────────────────
+    // ── Multi-select token warnings ────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
@@ -347,10 +360,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// C3: Context-aware warning based on real AI context window limits.
-    /// Shown in the selection toolbar below SelectedTokensLabel.
-    /// </summary>
     public string SelectionWarningLabel
     {
         get
@@ -383,7 +392,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool HasSelectionWarning => !string.IsNullOrEmpty(SelectionWarningLabel);
-
     public bool CanMerge => SelectedCount >= 2;
 
     // ── Saved repos ────────────────────────────────────────────────────────
@@ -399,15 +407,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RepoUrl = value.Url;
         Branch  = value.Branch;
         if (value.HasToken) FireAndForget(LoadTokenForRepoAsync(value));
-
-        // C6: restore workspace snapshot
         FireAndForget(RestoreWorkspaceAsync(value));
     }
 
-    public bool HasSavedRepos   => SavedRepos.Count > 0;
-    public bool HasSelectedRepo => SelectedSavedRepo is not null;
-
-    /// <summary>C6: True when the selected repo has a saved workspace snapshot.</summary>
+    public bool HasSavedRepos    => SavedRepos.Count > 0;
+    public bool HasSelectedRepo  => SelectedSavedRepo is not null;
     public bool HasWorkspaceSaved => SelectedSavedRepo?.HasWorkspace ?? false;
 
     // ── Prompt selection ───────────────────────────────────────────────────
@@ -423,8 +427,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string>            BranchOptions      { get; } = [];
     public ObservableCollection<SavedRepo>         SavedRepos         { get; } = [];
     public ObservableCollection<PromptItem>        Prompts            { get; } = [];
-
-    /// <summary>C4: All files returned by the last fetch, for the file browser panel.</summary>
     public ObservableCollection<FetchedFileEntry>  FetchedFiles       { get; } = [];
 
     public bool HasBranchOptions => BranchOptions.Count > 0;
@@ -456,7 +458,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         Chunks.CollectionChanged += (_, _) =>
         {
-            RefreshFilteredChunks();
+            // forceRebuild=true: the source collection changed, must rebuild regardless of SequenceEqual
+            RefreshFilteredChunks(forceRebuild: true);
             OnPropertyChanged(nameof(CopyProgressLabel));
             OnPropertyChanged(nameof(HasCopyProgress));
         };
@@ -550,7 +553,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _logger.LogWarning(ex, "Could not load token for repo {Id}.", repo.Id); }
     }
 
-    // ── C6: Workspace restore ─────────────────────────────────────────────
+    // ── Workspace restore ──────────────────────────────────────────────────
 
     private async Task RestoreWorkspaceAsync(SavedRepo repo)
     {
@@ -563,20 +566,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 var labels = JsonSerializer.Deserialize<List<string>>(repo.SavedEnabledExts) ?? [];
                 if (labels.Count > 0)
-                {
                     foreach (var f in FileTypeFilters)
                         f.IsEnabled = labels.Contains(f.Label, StringComparer.OrdinalIgnoreCase);
-                }
             }
 
             if (!string.IsNullOrEmpty(repo.SavedExcludedFolders))
             {
                 var names = JsonSerializer.Deserialize<List<string>>(repo.SavedExcludedFolders) ?? [];
                 if (names.Count > 0)
-                {
                     foreach (var f in FolderFilters)
                         f.IsExcluded = names.Contains(f.Name, StringComparer.OrdinalIgnoreCase);
-                }
             }
 
             if (!string.IsNullOrEmpty(repo.SavedPatterns))
@@ -606,6 +605,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     foreach (var p in Prompts) p.IsSelectedForShare = false;
                     prompt.IsSelectedForShare = true;
                     OnPropertyChanged(nameof(SelectedPrompt));
+                    OnPropertyChanged(nameof(SelectedPromptLabel));
+                    OnPropertyChanged(nameof(HasSelectedPrompt));
                 }
             }
         }
@@ -704,7 +705,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         PropertyChangedEventHandler h = (_, e) =>
         {
             if (e.PropertyName == nameof(PromptItem.IsSelectedForShare))
+            {
                 OnPropertyChanged(nameof(SelectedPrompt));
+                OnPropertyChanged(nameof(SelectedPromptLabel));
+                OnPropertyChanged(nameof(HasSelectedPrompt));
+            }
         };
         prompt.PropertyChanged += h;
         _promptHandlers.Add((prompt, h));
@@ -713,7 +718,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void UnsubscribePrompt(PromptItem prompt)
     {
         var entry = _promptHandlers.FirstOrDefault(x => x.Prompt == prompt);
-        if (entry.Prompt is not null) { prompt.PropertyChanged -= entry.Handler; _promptHandlers.Remove(entry); }
+        if (entry.Prompt is not null)
+        {
+            prompt.PropertyChanged -= entry.Handler;
+            _promptHandlers.Remove(entry);
+        }
     }
 
     private void UnsubscribeAllPrompts()
@@ -749,7 +758,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void UnsubscribeChunk(CodeChunk chunk)
     {
         var entry = _chunkHandlers.FirstOrDefault(x => x.Chunk == chunk);
-        if (entry.Chunk is not null) { chunk.PropertyChanged -= entry.Handler; _chunkHandlers.Remove(entry); }
+        if (entry.Chunk is not null)
+        {
+            chunk.PropertyChanged -= entry.Handler;
+            _chunkHandlers.Remove(entry);
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -796,7 +809,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var repos = await _db.GetSavedReposAsync();
+            var repos    = await _db.GetSavedReposAsync();
             var existing = repos.FirstOrDefault(r => r.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
             if (existing is not null) { existing.Branch = branch; await _db.UpsertRepoAsync(existing); }
             else await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = branch });
@@ -805,7 +818,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save repo."); }
     }
 
-    // ── C4: Populate FetchedFiles from raw file list ───────────────────────
+    // ── Populate FetchedFiles from raw file list ───────────────────────────
 
     private void PopulateFetchedFiles(List<(string Path, string Content)> files)
     {
@@ -823,7 +836,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 FileName = fileName,
                 Folder   = folder,
             };
-            // Mirror existing exclusion state from FilePatternFilters
             entry.IsExcluded = FilePatternFilters.Any(f =>
                 f.IsEnabled &&
                 fileName.Equals(f.Pattern, StringComparison.OrdinalIgnoreCase));
@@ -840,15 +852,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (entry.IsExcluded)
         {
-            // Add exact-filename pattern if not already present
             if (!FilePatternFilters.Any(f => f.Pattern.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase)))
             {
-                var pf = new FilePatternFilter
-                {
-                    Pattern    = entry.FileName,
-                    IsEnabled  = true,
-                    IsAutoAdded = true,
-                };
+                var pf = new FilePatternFilter { Pattern = entry.FileName, IsEnabled = true, IsAutoAdded = true };
                 pf.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FilePatternSummary));
                 FilePatternFilters.Add(pf);
                 OnPropertyChanged(nameof(FilePatternSummary));
@@ -856,7 +862,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         else
         {
-            // Remove auto-added pattern for this file
             var autoPattern = FilePatternFilters.FirstOrDefault(f =>
                 f.IsAutoAdded &&
                 f.Pattern.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase));
@@ -871,6 +876,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // ══════════════════════════════════════════════════════════════════════
     //  COMMANDS
     // ══════════════════════════════════════════════════════════════════════
+
+    // ── Navigation ────────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void NavigateToPromptsPage() =>
+        NavigateToPromptsPageRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void GoBack() =>
+        GoBackRequested?.Invoke(this, EventArgs.Empty);
 
     // ── Fetch ──────────────────────────────────────────────────────────────
 
@@ -928,7 +943,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         $"No files contain the keyword \"{kw}\". Clear the keyword filter or try a different term.");
             }
 
-            // C4: populate file browser before chunking
             PopulateFetchedFiles(files);
 
             TotalFiles = files.Count;
@@ -966,7 +980,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool CanFetch() =>
         !IsBusy && !string.IsNullOrWhiteSpace(RepoUrl) && FileTypeFilters.Any(f => f.IsEnabled);
 
-    // ── C1: Auto-detect ────────────────────────────────────────────────────
+    // ── Auto-detect (Android-safe local path scan) ─────────────────────────
 
     [RelayCommand]
     private async Task AutoDetectFileTypesAsync()
@@ -981,15 +995,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (IsLocalPath(inputPath))
             {
-                // For local paths: scan extensions directly
+                // BUG FIX: Directory.EnumerateFiles with SearchOption.AllDirectories
+                // throws UnauthorizedAccessException on Android sandboxed directories.
+                // Use a safe manual walk instead (same pattern as LocalFileService).
                 var extCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 if (Directory.Exists(inputPath))
                 {
-                    foreach (var file in Directory.EnumerateFiles(inputPath, "*.*", SearchOption.AllDirectories))
+                    var queue = new Queue<string>(new[] { inputPath });
+                    while (queue.Count > 0)
                     {
-                        var ext = Path.GetExtension(file).ToLowerInvariant();
-                        if (!string.IsNullOrEmpty(ext))
-                            extCounts[ext] = extCounts.GetValueOrDefault(ext, 0) + 1;
+                        var current = queue.Dequeue();
+
+                        IEnumerable<string> files;
+                        try   { files = Directory.EnumerateFiles(current); }
+                        catch { continue; }
+
+                        foreach (var file in files)
+                        {
+                            var ext = Path.GetExtension(file).ToLowerInvariant();
+                            if (!string.IsNullOrEmpty(ext))
+                                extCounts[ext] = extCounts.GetValueOrDefault(ext, 0) + 1;
+                        }
+
+                        IEnumerable<string> subdirs;
+                        try   { subdirs = Directory.EnumerateDirectories(current); }
+                        catch { continue; }
+
+                        foreach (var sub in subdirs) queue.Enqueue(sub);
                     }
                 }
                 detected = extCounts;
@@ -1006,25 +1038,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            // First pass: enable filters whose extensions appear in detected
             foreach (var f in FileTypeFilters)
                 f.IsEnabled = f.Extensions.Any(e => detected.ContainsKey(e));
 
-            // C1: Second pass — infer companion extensions
-            // e.g. if .cs was detected → also enable .csproj and .xml
             var inferredLabels = new List<string>();
             foreach (var (detectedExt, _) in detected)
             {
-                // Check which language maps to this extension
-                foreach (var (langName, companionExts) in LanguageExtensionInference)
+                foreach (var (_, companionExts) in LanguageExtensionInference)
                 {
-                    // Find what primary extension this language contributes
-                    var primaryFilter = FileTypeFilters.FirstOrDefault(f =>
-                        f.Extensions.Any(e => e.Equals(detectedExt, StringComparison.OrdinalIgnoreCase)));
-                    if (primaryFilter is null) continue;
-
-                    // Check if the detected language name loosely matches (by looking at the filter extensions)
-                    // For .cs → enable .csproj and .xml
                     foreach (var companionExt in companionExts)
                     {
                         var companionFilter = FileTypeFilters.FirstOrDefault(f =>
@@ -1038,7 +1059,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 }
             }
 
-            // If .cs was detected (C# project), always enable .csproj
             if (detected.Any(kv => kv.Key.Equals(".cs", StringComparison.OrdinalIgnoreCase)))
             {
                 var csproj = FileTypeFilters.FirstOrDefault(f => f.Label == ".csproj");
@@ -1093,13 +1113,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // ── Chip toggles ───────────────────────────────────────────────────────
 
-    [RelayCommand] private static void ToggleFileType(FileTypeFilter f)      { if (f is not null) f.IsEnabled  = !f.IsEnabled;  }
-    [RelayCommand] private static void ToggleFolder(FolderFilter f)          { if (f is not null) f.IsExcluded = !f.IsExcluded; }
-    [RelayCommand] private static void ToggleFilePattern(FilePatternFilter p) { if (p is not null) p.IsEnabled = !p.IsEnabled;  }
+    [RelayCommand] private static void ToggleFileType(FileTypeFilter f)       { if (f is not null) f.IsEnabled  = !f.IsEnabled;  }
+    [RelayCommand] private static void ToggleFolder(FolderFilter f)           { if (f is not null) f.IsExcluded = !f.IsExcluded; }
+    [RelayCommand] private static void ToggleFilePattern(FilePatternFilter p) { if (p is not null) p.IsEnabled  = !p.IsEnabled;  }
 
-    [RelayCommand] private void ToggleAllFileTypes()     { bool a = FileTypeFilters.Any(f => f.IsEnabled);   foreach (var f in FileTypeFilters)    f.IsEnabled  = !a; }
-    [RelayCommand] private void ToggleAllFolderFilters() { bool a = FolderFilters.Any(f => f.IsExcluded);    foreach (var f in FolderFilters)       f.IsExcluded = !a; }
-    [RelayCommand] private void ToggleAllFilePatterns()  { bool a = FilePatternFilters.Any(f => f.IsEnabled); foreach (var f in FilePatternFilters) f.IsEnabled  = !a; }
+    [RelayCommand] private void ToggleAllFileTypes()     { bool a = FileTypeFilters.Any(f => f.IsEnabled);    foreach (var f in FileTypeFilters)    f.IsEnabled  = !a; }
+    [RelayCommand] private void ToggleAllFolderFilters() { bool a = FolderFilters.Any(f => f.IsExcluded);     foreach (var f in FolderFilters)       f.IsExcluded = !a; }
+    [RelayCommand] private void ToggleAllFilePatterns()  { bool a = FilePatternFilters.Any(f => f.IsEnabled); foreach (var f in FilePatternFilters)  f.IsEnabled  = !a; }
 
     [RelayCommand]
     private void AddCustomFolder()
@@ -1132,7 +1152,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(FilePatternSummary));
     }
 
-    // ── C4: File browser commands ──────────────────────────────────────────
+    // ── File browser commands ──────────────────────────────────────────────
 
     [RelayCommand] private void ToggleFetchedFiles() => IsFetchedFilesExpanded = !IsFetchedFilesExpanded;
 
@@ -1140,6 +1160,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void ToggleFetchedFileExclusion(FetchedFileEntry entry)
     {
         if (entry is not null) entry.IsExcluded = !entry.IsExcluded;
+    }
+
+    // ── Chunk file include/exclude all ────────────────────────────────────
+
+    /// <summary>Re-include all files in the specified chunk (clears all per-file exclusions).</summary>
+    [RelayCommand]
+    private void IncludeAllChunkFiles(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        foreach (var f in chunk.FileEntries) f.IsExcluded = false;
+    }
+
+    /// <summary>Exclude all files in the specified chunk so they are skipped on copy.</summary>
+    [RelayCommand]
+    private void ExcludeAllChunkFiles(CodeChunk chunk)
+    {
+        if (chunk is null) return;
+        foreach (var f in chunk.FileEntries) f.IsExcluded = true;
     }
 
     // ── Chunk copy / share ─────────────────────────────────────────────────
@@ -1176,10 +1214,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { StatusText = $"⚠️ Could not open share sheet: {ex.Message}"; }
     }
 
-    [RelayCommand] private void TogglePreview(CodeChunk chunk)  { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
+    [RelayCommand] private void TogglePreview(CodeChunk chunk) { if (chunk is not null) chunk.IsPreviewExpanded = !chunk.IsPreviewExpanded; }
     [RelayCommand] private static void ToggleChunkSelection(CodeChunk chunk) { if (chunk is not null) chunk.IsSelected = !chunk.IsSelected; }
     [RelayCommand] private static void ToggleFileEntryExclusion(ChunkFile file) { if (file is not null) file.IsExcluded = !file.IsExcluded; }
-    [RelayCommand] private static void ToggleFileCode(ChunkFile file)          { if (file is not null) file.IsCodeExpanded = !file.IsCodeExpanded; }
+    [RelayCommand] private static void ToggleFileCode(ChunkFile file) { if (file is not null) file.IsCodeExpanded = !file.IsCodeExpanded; }
 
     [RelayCommand]
     private void SelectAllChunks()
@@ -1249,7 +1287,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         else Chunks.Add(merged);
         SubscribeChunk(merged);
 
-        // C5 fix: notify index change after renumber
         for (int i = 0; i < Chunks.Count; i++)
         {
             Chunks[i].Index = i;
@@ -1258,14 +1295,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         ChunkCount = Chunks.Count; TotalTokens = Chunks.Sum(c => c.EstimatedTokens);
         SelectedCount = 0;
-        RefreshFilteredChunks();
+        RefreshFilteredChunks(forceRebuild: true);
         OnPropertyChanged(nameof(CompactSummaryText));
         OnPropertyChanged(nameof(SelectAllChunksLabel));
     }
 
     // ── Prompts ────────────────────────────────────────────────────────────
-
-    [RelayCommand] private void TogglePrompts() => IsPromptsExpanded = !IsPromptsExpanded;
 
     [RelayCommand]
     private async Task CopyPromptAsync(PromptItem prompt)
@@ -1283,6 +1318,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         foreach (var p in Prompts) p.IsSelectedForShare = false;
         prompt.IsSelectedForShare = !was;
         OnPropertyChanged(nameof(SelectedPrompt));
+        OnPropertyChanged(nameof(SelectedPromptLabel));
+        OnPropertyChanged(nameof(HasSelectedPrompt));
     }
 
     [RelayCommand]
@@ -1309,7 +1346,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var title = prompt.EditTitle.Trim();
         if (string.IsNullOrEmpty(title)) title = "Untitled Prompt";
         prompt.Title = title; prompt.Content = prompt.EditContent.Trim(); prompt.IsEditing = false;
-        try { var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); prompt.Id = r.Id; OnPropertyChanged(nameof(SelectedPrompt)); }
+        try
+        {
+            var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt)));
+            prompt.Id = r.Id;
+            OnPropertyChanged(nameof(SelectedPrompt));
+            OnPropertyChanged(nameof(SelectedPromptLabel));
+        }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save prompt."); }
     }
 
@@ -1395,7 +1438,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         repo.Name = name; await _db.UpsertRepoAsync(repo); await RefreshSavedReposAsync();
     }
 
-    // ── C6: Save workspace ─────────────────────────────────────────────────
+    // ── Save workspace ─────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task SaveWorkspaceAsync()
@@ -1423,7 +1466,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save workspace."); }
     }
 
-    // ── Token info ─────────────────────────────────────────────────────────
+    // ── Misc commands ──────────────────────────────────────────────────────
 
     [RelayCommand] private void ShowTokenInfo() => TokenInfoRequested?.Invoke(this, EventArgs.Empty);
     [RelayCommand] private void ShowInfo(string message) => ShowInfoRequested?.Invoke(this, message ?? string.Empty);
@@ -1444,8 +1487,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand] private void ToggleFolders()      => IsFoldersExpanded      = !IsFoldersExpanded;
     [RelayCommand] private void ToggleFilePatterns() => IsFilePatternsExpanded = !IsFilePatternsExpanded;
     [RelayCommand] private void ShowHistory()        => ShowHistoryRequested?.Invoke(this, SavedRepos.ToList());
-
-    [RelayCommand] private void ClearChunkSearch() => ChunkSearchText = string.Empty;
+    [RelayCommand] private void ClearChunkSearch()   => ChunkSearchText        = string.Empty;
 
     // ── Reset ──────────────────────────────────────────────────────────────
 
