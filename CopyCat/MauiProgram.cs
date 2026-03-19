@@ -37,7 +37,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IDatabaseService,  DatabaseService>();
         builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
 
-        // UI
+        // UI — PromptsPage is NOT registered here: it is instantiated on-demand
+        // in MainPage.xaml.cs via Navigation.PushAsync(new PromptsPage(viewModel)).
+        // This avoids DI singleton lifecycle conflicts with the Navigation stack.
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainPage>();
 
