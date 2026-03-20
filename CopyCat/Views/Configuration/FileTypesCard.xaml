@@ -1,83 +1,89 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   FileTypesCard.xaml
-  Extracted from MainPage.xaml — Phase 5 ContentView split.
   BindingContext is inherited from MainPage (MainViewModel).
-  Commands inside DataTemplates bind via {x:Reference Self} which
-  resolves to this ContentView, then .BindingContext.XxxCommand.
+  All paths must go through MainViewModel child properties:
+  Filter.Xxx, Repo.Xxx, Chunking.Xxx etc.
 -->
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:CopyCat.ViewModels"
     xmlns:models="clr-namespace:CopyCat.Models"
-    xmlns:behaviors="clr-namespace:CopyCat.Behaviors"
     x:Class="CopyCat.Views.Configuration.FileTypesCard"
     x:DataType="vm:MainViewModel"
     x:Name="Self">
 
     <ContentView.Content>
-                    <!-- ── FILE TYPES ── -->
-                    <Border Style="{StaticResource Card}">
-                        <VerticalStackLayout Spacing="0">
-                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                                <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
-                                    <Label Text="FILE TYPES" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
-                                    <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
-                                        <Label.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
-                                                                  CommandParameter="Green chip = included in chunking. Grey chip = excluded. Tap 🔍 Auto to scan the repo and enable matching types automatically. Tap individual chips to toggle them. Tap 'Toggle all' to flip all at once." />
-                                        </Label.GestureRecognizers>
-                                    </Label>
-                                </HorizontalStackLayout>
-                                <Button Grid.Column="1" Style="{StaticResource AutoDetectBtn}" Text="🔍 Auto"
-                                        Command="{Binding Filter.AutoDetectFileTypesCommand}"
-                                        IsVisible="{Binding Filter.CanAutoDetect}"
-                                        IsEnabled="{Binding Filter.IsAutoDetecting, Converter={StaticResource InverseBool}}"
-                                        ToolTipProperties.Text="Scan the repository to detect which file types are present, then enable matching filters automatically" />
-                                <Button Grid.Column="2" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
-                                        Command="{Binding Filter.ToggleAllFileTypesCommand}"
-                                        IsVisible="{Binding Filter.IsFileTypesExpanded}"
-                                        ToolTipProperties.Text="Enable or disable all file type filters at once" />
-                                <Label Grid.Column="3"
-                                       Text="{Binding Filter.IsFileTypesExpanded, Converter={StaticResource ExpandArrowConv}}"
-                                       TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
-                                    <Label.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Filter.ToggleFileTypesCommand}" />
-                                    </Label.GestureRecognizers>
-                                </Label>
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding Filter.ToggleFileTypesCommand}" />
-                                </Grid.GestureRecognizers>
-                            </Grid>
+        <!-- ── FILE TYPES ── -->
+        <Border Style="{StaticResource Card}">
+            <VerticalStackLayout Spacing="0">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
+                        <Label Text="FILE TYPES" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                        <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                      CommandParameter="Green chip = included in chunking. Grey chip = excluded. Tap 🔍 Auto to scan the repo and enable matching types automatically. Tap individual chips to toggle them. Tap 'Toggle all' to flip all at once." />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </HorizontalStackLayout>
 
-                            <Label Text="{Binding Filter.AutoDetectStatusText}" FontSize="11"
-                                   TextColor="{StaticResource AccentSecond}" Margin="0,2,0,6"
-                                   IsVisible="{Binding Filter.HasAutoDetectStatus}" LineBreakMode="WordWrap" />
+                    <!-- 🔍 Auto detect button -->
+                    <Button Grid.Column="1" Style="{StaticResource AutoDetectBtn}" Text="🔍 Auto"
+                            Command="{Binding Filter.AutoDetectFileTypesCommand}"
+                            IsVisible="{Binding Filter.CanAutoDetect}"
+                            IsEnabled="{Binding Filter.IsAutoDetecting, Converter={StaticResource InverseBool}}"
+                            ToolTipProperties.Text="Scan the repository to detect which file types are present, then enable matching filters automatically" />
 
-                            <Label Text="{Binding Filter.FileTypeCardSummary}" Style="{StaticResource FilterSummaryLabel}"
-                                   IsVisible="{Binding Filter.IsFileTypesExpanded, Converter={StaticResource InverseBool}}" />
+                    <Button Grid.Column="2" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
+                            Command="{Binding Filter.ToggleAllFileTypesCommand}"
+                            IsVisible="{Binding Filter.IsFileTypesExpanded}"
+                            ToolTipProperties.Text="Enable or disable all file type filters at once" />
 
-                            <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
-                                        IsVisible="{Binding Filter.IsFileTypesExpanded}">
-                                <BindableLayout.ItemsSource><Binding Path="FileTypeFilters" /></BindableLayout.ItemsSource>
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="models:FileTypeFilter">
-                                        <Border Style="{StaticResource ChipBorder}"
-                                                BackgroundColor="{Binding IsEnabled, Converter={StaticResource ChipIncludedBgConv}}"
-                                                Stroke="{Binding IsEnabled, Converter={StaticResource ChipIncludedBorderConv}}">
-                                            <Label Text="{Binding Label}" Style="{StaticResource ChipLabel}"
-                                                   TextColor="{Binding IsEnabled, Converter={StaticResource ChipLabelColorConv}}" />
-                                            <Border.GestureRecognizers>
-                                                <TapGestureRecognizer
-                                                    Command="{Binding Source={x:Reference Self}, Path=BindingContext.ToggleFileTypeCommand}"
-                                                    CommandParameter="{Binding .}" />
-                                            </Border.GestureRecognizers>
-                                        </Border>
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </FlexLayout>
-                        </VerticalStackLayout>
-                    </Border>
+                    <Label Grid.Column="3"
+                           Text="{Binding Filter.IsFileTypesExpanded, Converter={StaticResource ExpandArrowConv}}"
+                           TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Filter.ToggleFileTypesCommand}" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding Filter.ToggleFileTypesCommand}" />
+                    </Grid.GestureRecognizers>
+                </Grid>
+
+                <Label Text="{Binding Filter.AutoDetectStatusText}" FontSize="11"
+                       TextColor="{StaticResource AccentSecond}" Margin="0,2,0,6"
+                       IsVisible="{Binding Filter.HasAutoDetectStatus}" LineBreakMode="WordWrap" />
+
+                <Label Text="{Binding Filter.FileTypeCardSummary}" Style="{StaticResource FilterSummaryLabel}"
+                       IsVisible="{Binding Filter.IsFileTypesExpanded, Converter={StaticResource InverseBool}}" />
+
+                <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
+                            IsVisible="{Binding Filter.IsFileTypesExpanded}">
+                    <!-- FIX: was "FileTypeFilters" — must be "Filter.FileTypeFilters" -->
+                    <BindableLayout.ItemsSource>
+                        <Binding Path="Filter.FileTypeFilters" />
+                    </BindableLayout.ItemsSource>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:FileTypeFilter">
+                            <Border Style="{StaticResource ChipBorder}"
+                                    BackgroundColor="{Binding IsEnabled, Converter={StaticResource ChipIncludedBgConv}}"
+                                    Stroke="{Binding IsEnabled, Converter={StaticResource ChipIncludedBorderConv}}">
+                                <Label Text="{Binding Label}" Style="{StaticResource ChipLabel}"
+                                       TextColor="{Binding IsEnabled, Converter={StaticResource ChipLabelColorConv}}" />
+                                <Border.GestureRecognizers>
+                                    <!-- FIX: was BindingContext.ToggleFileTypeCommand — must be BindingContext.Filter.ToggleFileTypeCommand -->
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.Filter.ToggleFileTypeCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+            </VerticalStackLayout>
+        </Border>
 
     </ContentView.Content>
 

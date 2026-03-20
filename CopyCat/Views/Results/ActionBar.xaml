@@ -3,8 +3,6 @@
   ActionBar.xaml
   Extracted from MainPage.xaml — Phase 5 ContentView split.
   BindingContext is inherited from MainPage (MainViewModel).
-  Commands inside DataTemplates bind via {x:Reference Self} which
-  resolves to this ContentView, then .BindingContext.XxxCommand.
 -->
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -17,9 +15,9 @@
 
     <ContentView.Content>
         <!-- ═══════════════════════════════════════════════════════════════
-             ROW 1 — SMART ACTION BAR
+             SMART ACTION BAR
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="1" Style="{StaticResource SmartActionBarBorder}" Padding="16,10,16,50">
+        <Border Style="{StaticResource SmartActionBarBorder}" Padding="16,10,16,50">
             <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
 
                 <!-- Busy row -->
@@ -114,8 +112,6 @@
             </Grid>
         </Border>
 
-    </Grid>
-</ContentPage>
     </ContentView.Content>
 
 </ContentView>

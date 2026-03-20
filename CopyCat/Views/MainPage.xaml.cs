@@ -16,7 +16,6 @@ public partial class MainPage : ContentPage
         // ── Branch picker (RepositoryViewModel) ──────────────────────────────
         _vm.Repo.BranchPickerRequested += async (_, branches) =>
         {
-            // Fetch branches live then show picker
             var result = await DisplayActionSheet("Select branch", "Cancel", null,
                 [.. _vm.Repo.BranchOptions]);
             if (result is not null and not "Cancel")
@@ -39,7 +38,7 @@ public partial class MainPage : ContentPage
                 "Got it");
         };
 
-        // ── Generic info dialog (RepositoryViewModel / FilterViewModel) ───────
+        // ── Generic info dialog ───────────────────────────────────────────────
         _vm.Repo.ShowInfoRequested += async (_, message) =>
         {
             if (!string.IsNullOrWhiteSpace(message))
@@ -78,7 +77,10 @@ public partial class MainPage : ContentPage
         // ── Navigate to PromptsPage (PromptsViewModel) ────────────────────────
         _vm.Prompts.NavigateToPromptsPageRequested += async (_, _) =>
         {
-            var page = new PromptsPage(_vm.Prompts);
+            // FIX: pass _vm (MainViewModel), NOT _vm.Prompts.
+            // PromptsPage.xaml has x:DataType="vm:MainViewModel" and binds
+            // through Prompts.Xxx — BindingContext must be MainViewModel.
+            var page = new PromptsPage(_vm);
             await Navigation.PushAsync(page);
         };
     }
@@ -92,7 +94,7 @@ public partial class MainPage : ContentPage
 
             if (!string.IsNullOrWhiteSpace(SharedUrlService.PendingUrl))
             {
-                _vm.Repo.RepoUrl        = SharedUrlService.PendingUrl;
+                _vm.Repo.RepoUrl = SharedUrlService.PendingUrl;
                 SharedUrlService.PendingUrl = null;
             }
         }

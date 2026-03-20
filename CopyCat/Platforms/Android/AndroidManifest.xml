@@ -1,55 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-  <application
-      android:allowBackup="true"
-      android:icon="@mipmap/appicon"
-      android:roundIcon="@mipmap/appicon_round"
-      android:supportsRtl="true"
-      android:networkSecurityConfig="@xml/network_security_config">
-
-    <!-- Main activity -->
-    <activity
-        android:name="microsoft.maui.defaultinterface.MauiAppCompatActivity"
-        android:theme="@style/Maui.SplashTheme"
-        android:mainAction="android.intent.action.MAIN"
-        android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode"
-        android:windowSoftInputMode="adjustResize"
-        android:exported="true">
-
-      <!-- App launcher -->
-      <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
-      </intent-filter>
-
-      <!--
-        "Share to CopyCat" from browser / other apps.
-        This is what lets a user share a GitHub URL from Chrome
-        directly into CopyCat on Android.
-      -->
-      <intent-filter>
-        <action android:name="android.intent.action.SEND" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/plain" />
-      </intent-filter>
-
-    </activity>
-  </application>
-
-  <!--
-    INTERNET — required for:
-      • GitHub REST API calls (FetchFilesAsync, FetchBranchesAsync, DetectFileTypesInRepoAsync)
-      • HttpClient named "github" registered in MauiProgram
-    Without this permission ALL network calls silently return errors in Release mode.
-    Debug builds run in the emulator which has a blanket INTERNET grant.
-  -->
-  <uses-permission android:name="android.permission.INTERNET" />
-
-  <!--
-    ACCESS_NETWORK_STATE — lets the app check connectivity before making API calls,
-    giving better error messages when offline.
-  -->
-  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
+	<application
+		android:allowBackup="true"
+		android:icon="@mipmap/appicon"
+		android:roundIcon="@mipmap/appicon_round"
+		android:supportsRtl="true">
+	</application>
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

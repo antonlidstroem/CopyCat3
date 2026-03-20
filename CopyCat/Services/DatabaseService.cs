@@ -1,5 +1,5 @@
 using CopyCat.Models;
-using CopyCat.Models.Catalog;
+using CopyCat.Models.Catalog;          // ← BuiltInPrompts.All lives here
 using CopyCat.Services.Interfaces;
 using SQLite;
 
@@ -73,6 +73,7 @@ public class DatabaseService : IRepoRepository, IPromptRepository
         var count = await _db!.Table<PromptRecord>().CountAsync();
         if (count > 0) return;
 
+        // BuiltInPrompts resolves to CopyCat.Models.Catalog.BuiltInPrompts (8 prompts)
         foreach (var seed in BuiltInPrompts.All)
         {
             await _db.InsertAsync(new PromptRecord

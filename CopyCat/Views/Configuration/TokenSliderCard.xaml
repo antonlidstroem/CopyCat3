@@ -3,8 +3,10 @@
   TokenSliderCard.xaml
   Extracted from MainPage.xaml — Phase 5 ContentView split.
   BindingContext is inherited from MainPage (MainViewModel).
-  Commands inside DataTemplates bind via {x:Reference Self} which
-  resolves to this ContentView, then .BindingContext.XxxCommand.
+
+  NOTE: The config-mode error banner is NOT here.
+  It lives at the panel level in Views/MainPage.xaml, directly
+  after <cfg:TokenSliderCard />.
 -->
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -16,56 +18,51 @@
     x:Name="Self">
 
     <ContentView.Content>
-                    <!-- ── TOKEN SLIDER ── -->
-                    <Border Style="{StaticResource Card}">
-                        <VerticalStackLayout Spacing="0">
-                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6" ColumnSpacing="8">
-                                <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
-                                    <Label Text="MAX TOKENS / CHUNK" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
-                                    <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
-                                        <Label.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
-                                                                  CommandParameter="Controls how many tokens fit in one chunk (~4 characters = 1 token). Fewer tokens = more chunks to paste, but each paste is smaller. More tokens = fewer pastes but may exceed your AI's context window. Recommended: 16K for GPT-4 Turbo, Claude 3+, Gemini 1.5. Use 32K only for models with large context windows." />
-                                        </Label.GestureRecognizers>
-                                    </Label>
-                                </HorizontalStackLayout>
-                                <Border Grid.Column="2" Style="{StaticResource TokenBadgeBorder}">
-                                    <Label Text="{Binding Chunking.MaxTokensLabel}" Style="{StaticResource TokenBadgeLabel}" />
-                                </Border>
-                            </Grid>
-                            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6" Margin="0,0,0,8">
-                                <Button Grid.Column="0" Text="4K"    Style="{StaticResource SliderPresetBtn}"
-                                        Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="4000"
-                                        ToolTipProperties.Text="4,096 tokens — fits GPT-3.5 Turbo and basic AI chat interfaces" />
-                                <Button Grid.Column="1" Text="8K"    Style="{StaticResource SliderPresetBtn}"
-                                        Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="8000"
-                                        ToolTipProperties.Text="8,192 tokens — good balance for GPT-4 (8K context)" />
-                                <Button Grid.Column="2" Text="★ 16K" Style="{StaticResource SliderPresetBtn}"
-                                        Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="16000"
-                                        ToolTipProperties.Text="16,384 tokens — RECOMMENDED for GPT-4 Turbo, Claude 3+, Gemini 1.5" />
-                                <Button Grid.Column="3" Text="32K"   Style="{StaticResource SliderPresetBtn}"
-                                        Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="32000"
-                                        ToolTipProperties.Text="32,768 tokens — maximum; only use with large-context models (Claude Opus, GPT-4 32K)" />
-                            </Grid>
-                            <Label Text="{Binding Chunking.SliderWarningText}" TextColor="{Binding Chunking.SliderWarningColor}"
-                                   Style="{StaticResource SliderWarningLabel}" />
-                            <Slider Minimum="1000" Maximum="32000" Value="{Binding Chunking.MaxTokensPerChunk, Mode=TwoWay}"
-                                    MinimumTrackColor="{StaticResource SliderTrackActive}"
-                                    MaximumTrackColor="{StaticResource SliderTrackInactive}"
-                                    ThumbColor="{StaticResource SliderThumb}" HeightRequest="40"
-                                    IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}" />
-                            <Grid ColumnDefinitions="*,*">
-                                <Label Grid.Column="0" Text="1 000" TextColor="{StaticResource TextDim}" FontSize="10" />
-                                <Label Grid.Column="1" Text="32 000" TextColor="{StaticResource TextDim}" FontSize="10" HorizontalOptions="End" />
-                            </Grid>
-                        </VerticalStackLayout>
+        <!-- ── TOKEN SLIDER ── -->
+        <Border Style="{StaticResource Card}">
+            <VerticalStackLayout Spacing="0">
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6" ColumnSpacing="8">
+                    <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
+                        <Label Text="MAX TOKENS / CHUNK" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                        <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                      CommandParameter="Controls how many tokens fit in one chunk (~4 characters = 1 token). Fewer tokens = more chunks to paste, but each paste is smaller. More tokens = fewer pastes but may exceed your AI's context window. Recommended: 16K for GPT-4 Turbo, Claude 3+, Gemini 1.5. Use 32K only for models with large context windows." />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </HorizontalStackLayout>
+                    <Border Grid.Column="2" Style="{StaticResource TokenBadgeBorder}">
+                        <Label Text="{Binding Chunking.MaxTokensLabel}" Style="{StaticResource TokenBadgeLabel}" />
                     </Border>
+                </Grid>
+                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6" Margin="0,0,0,8">
+                    <Button Grid.Column="0" Text="4K"    Style="{StaticResource SliderPresetBtn}"
+                            Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="4000"
+                            ToolTipProperties.Text="4,096 tokens — fits GPT-3.5 Turbo and basic AI chat interfaces" />
+                    <Button Grid.Column="1" Text="8K"    Style="{StaticResource SliderPresetBtn}"
+                            Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="8000"
+                            ToolTipProperties.Text="8,192 tokens — good balance for GPT-4 (8K context)" />
+                    <Button Grid.Column="2" Text="★ 16K" Style="{StaticResource SliderPresetBtn}"
+                            Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="16000"
+                            ToolTipProperties.Text="16,384 tokens — RECOMMENDED for GPT-4 Turbo, Claude 3+, Gemini 1.5" />
+                    <Button Grid.Column="3" Text="32K"   Style="{StaticResource SliderPresetBtn}"
+                            Command="{Binding Chunking.SetPresetTokensCommand}" CommandParameter="32000"
+                            ToolTipProperties.Text="32,768 tokens — maximum; only use with large-context models (Claude Opus, GPT-4 32K)" />
+                </Grid>
+                <Label Text="{Binding Chunking.SliderWarningText}" TextColor="{Binding Chunking.SliderWarningColor}"
+                       Style="{StaticResource SliderWarningLabel}" />
+                <Slider Minimum="1000" Maximum="32000" Value="{Binding Chunking.MaxTokensPerChunk, Mode=TwoWay}"
+                        MinimumTrackColor="{StaticResource SliderTrackActive}"
+                        MaximumTrackColor="{StaticResource SliderTrackInactive}"
+                        ThumbColor="{StaticResource SliderThumb}" HeightRequest="40"
+                        IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}" />
+                <Grid ColumnDefinitions="*,*">
+                    <Label Grid.Column="0" Text="1 000" TextColor="{StaticResource TextDim}" FontSize="10" />
+                    <Label Grid.Column="1" Text="32 000" TextColor="{StaticResource TextDim}" FontSize="10" HorizontalOptions="End" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
 
-                    <Border Style="{StaticResource ErrorBorder}" IsVisible="{Binding Chunking.HasError}">
-                        <Grid ColumnDefinitions="28,*" ColumnSpacing="8">
-                            <Label Grid.Column="0" Text="⚠️" FontSize="18" VerticalOptions="Start" />
-                            <Label Grid.Column="1" Text="{Binding Chunking.ErrorText}" Style="{StaticResource ErrorLabel}" />
-                        </Grid>
     </ContentView.Content>
 
 </ContentView>
