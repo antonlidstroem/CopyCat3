@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:CopyCat.ViewModels"
+    xmlns:models="clr-namespace:CopyCat.Models"
+    x:Class="CopyCat.Views.Results.StatsBar"
+    x:DataType="vm:MainViewModel"
+    x:Name="Self">
+
+    <ContentView.Content>
+        <VerticalStackLayout Spacing="0">
+
+            <!-- Summary stats bar -->
+            <Border Style="{StaticResource SummaryBorder}" IsVisible="{Binding Chunks.HasChunks}">
+                <Grid ColumnDefinitions="*,*,*,*">
+                    <VerticalStackLayout Grid.Column="0" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Chunking.TotalFiles}"    Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="files"                   Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Chunking.TotalProjects}" Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="projects"                Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Chunking.ChunkCount}"    Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="chunks"                  Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="3" HorizontalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Chunking.TotalTokens}"   Style="{StaticResource StatNumberLabel}" />
+                        <Label Text="tokens"                  Style="{StaticResource StatCaptionLabel}" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <!--
+                ITEM 8: Active AI Prompt card — full three-zone layout matching chunk cards.
+                Shown when results are displayed regardless of whether a prompt is selected.
+                If no prompt is selected, the card shows a "tap to choose" hint.
+            -->
+            <Border IsVisible="{Binding Chunks.HasChunks}"
+                    Style="{StaticResource ChunkBorder}"
+                    Stroke="{Binding Chunks.ActivePromptBorderColor}"
+                    StrokeThickness="{Binding Chunks.ActivePromptBorderThickness}"
+                    Margin="0,0,0,2">
+
+                <VerticalStackLayout Spacing="0">
+
+                    <!-- Three-zone row -->
+                    <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,90">
+
+                        <!-- ZONE A — select (tap = toggle IsPromptCardSelected) -->
+                        <Grid Grid.Row="0" Grid.Column="0"
+                              BackgroundColor="{Binding Chunks.ActivePromptZoneA}"
+                              Padding="14,10,10,10">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <!-- Selection dot (same style as chunk cards) -->
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource SelectionDot}"
+                                        BackgroundColor="{Binding Chunks.IsPromptCardSelected, Converter={StaticResource SelectionDotBgConv}}"
+                                        Stroke="{Binding Chunks.IsPromptCardSelected, Converter={StaticResource SelectionDotBorderConv}}"
+                                        VerticalOptions="Center">
+                                    <Label Style="{StaticResource SelectionDotCheck}"
+                                           IsVisible="{Binding Chunks.IsPromptCardSelected}" />
+                                </Border>
+
+                                <!-- Prompt title + preview -->
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Label Text="AI PROMPT"
+                                               Style="{StaticResource SectionTitle}"
+                                               Margin="0" VerticalOptions="Center" />
+                                        <!-- No-prompt hint -->
+                                        <Label Text="— tap ⚙ to choose"
+                                               TextColor="{StaticResource TextDim}"
+                                               FontSize="11"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding Prompts.HasSelectedPrompt, Converter={StaticResource InverseBool}}" />
+                                    </HorizontalStackLayout>
+                                    <Label Text="{Binding Chunks.ActivePromptTitle}"
+                                           Style="{StaticResource ChunkTitleLabel}"
+                                           IsVisible="{Binding Chunks.HasActivePrompt}" />
+                                    <Label Text="{Binding Chunks.ActivePromptPreview}"
+                                           TextColor="{StaticResource TextMuted}"
+                                           FontSize="11"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2"
+                                           IsVisible="{Binding Chunks.HasActivePrompt}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Chunks.TogglePromptCardSelectionCommand}" />
+                            </Grid.GestureRecognizers>
+                        </Grid>
+
+                        <!-- Zone A/B separator -->
+                        <BoxView Grid.Row="0" Grid.Column="0"
+                                 HorizontalOptions="End"
+                                 Style="{StaticResource CardZoneSeparatorView}" />
+
+                        <!-- ZONE B — Copy + ⚙ navigate -->
+                        <VerticalStackLayout Grid.Row="0" Grid.Column="1"
+                                             VerticalOptions="Center"
+                                             HorizontalOptions="Center"
+                                             Spacing="4" Padding="0,8">
+                            <!-- Copied badge -->
+                            <Border Style="{StaticResource CopiedBadgeBorder}"
+                                    IsVisible="{Binding Chunks.IsActivePromptCopied}"
+                                    HorizontalOptions="Center">
+                                <Label Style="{StaticResource CopiedBadgeLabel}" />
+                            </Border>
+                            <!-- Copy button (same style as chunk cards) -->
+                            <Button Text="Copy"
+                                    Style="{StaticResource ChunkActionBtn}"
+                                    MinimumWidthRequest="68"
+                                    Command="{Binding Chunks.CopyActivePromptCommand}"
+                                    IsVisible="{Binding Chunks.HasActivePrompt}"
+                                    ToolTipProperties.Text="Copy the prompt text to clipboard. Paste it first, then copy chunks one by one." />
+                            <!-- Navigate to PromptsPage -->
+                            <Button Text="⚙"
+                                    Style="{StaticResource SmallIconBtn}"
+                                    HorizontalOptions="Center"
+                                    Command="{Binding Prompts.NavigateToPromptsPageCommand}"
+                                    ToolTipProperties.Text="Open AI Prompt Library — select, edit, or create prompts" />
+                        </VerticalStackLayout>
+
+                        <!-- ZONE C — expand strip (full prompt text preview) -->
+                        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                Style="{StaticResource CardZoneCBorder}"
+                                IsVisible="{Binding Chunks.HasActivePrompt}">
+                            <Grid ColumnDefinitions="*,Auto" HeightRequest="36">
+                                <Label Grid.Column="0"
+                                       Text="{Binding Chunks.ActivePromptExpandIcon}"
+                                       TextColor="{StaticResource TextMuted}"
+                                       FontSize="11" VerticalOptions="Center"
+                                       HorizontalTextAlignment="Center" />
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Chunks.ToggleActivePromptExpandCommand}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Expanded full prompt text -->
+                    <Border IsVisible="{Binding Chunks.IsActivePromptExpanded}"
+                            BackgroundColor="#0A0A14"
+                            StrokeThickness="0"
+                            Padding="14,10">
+                        <Label Text="{Binding Chunks.ActivePromptPreview}"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="12"
+                               LineBreakMode="WordWrap" />
+                    </Border>
+
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ContentView.Content>
+
+</ContentView>

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:CopyCat.ViewModels"
+    xmlns:models="clr-namespace:CopyCat.Models"
+    x:Class="CopyCat.Views.Configuration.FoldersCard"
+    x:DataType="vm:MainViewModel"
+    x:Name="Self">
+
+    <ContentView.Content>
+        <Border Style="{StaticResource Card}">
+            <VerticalStackLayout Spacing="0">
+
+                <!-- Card header -->
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
+                        <Label Text="EXCLUDE FOLDERS" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                        <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                      CommandParameter="Red chip = folder excluded. Green = included. Tap chip to toggle. After fetching a repo, the 'From this repo' section shows real folders to exclude." />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </HorizontalStackLayout>
+                    <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="Toggle all"
+                            Command="{Binding Filter.ToggleAllFolderFiltersCommand}"
+                            IsVisible="{Binding Filter.IsFoldersExpanded}"
+                            ToolTipProperties.Text="Flip all folder exclusions" />
+                    <Label Grid.Column="2"
+                           Text="{Binding Filter.IsFoldersExpanded, Converter={StaticResource ExpandArrowConv}}"
+                           TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Filter.ToggleFoldersCommand}" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding Filter.ToggleFoldersCommand}" />
+                    </Grid.GestureRecognizers>
+                </Grid>
+
+                <Label Text="{Binding Filter.FolderFilterSummary}" Style="{StaticResource FilterSummaryLabel}"
+                       IsVisible="{Binding Filter.IsFoldersExpanded, Converter={StaticResource InverseBool}}" />
+
+                <!-- Chips row -->
+                <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start"
+                            IsVisible="{Binding Filter.IsFoldersExpanded}">
+                    <BindableLayout.ItemsSource><Binding Path="Filter.FolderFilters" /></BindableLayout.ItemsSource>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:FolderFilter">
+                            <Border Style="{StaticResource ChipBorder}"
+                                    BackgroundColor="{Binding IsExcluded, Converter={StaticResource ChipExcludedBgConv}}"
+                                    Stroke="{Binding IsExcluded, Converter={StaticResource ChipExcludedBorderConv}}">
+                                <Label Text="{Binding Name}" Style="{StaticResource ChipLabel}"
+                                       TextColor="{Binding IsExcluded, Converter={StaticResource ChipLabelColorConv}}" />
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.Filter.ToggleFolderCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <!-- Custom folder entry -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                      IsVisible="{Binding Filter.IsFoldersExpanded}" Margin="0,6,0,0">
+                    <Border Grid.Column="0" Style="{StaticResource InputBorder}">
+                        <Entry Style="{StaticResource InputEntry}"
+                               Text="{Binding Filter.CustomFolderInput}"
+                               Placeholder="Add folder name… (e.g. migrations)"
+                               ReturnType="Done" ReturnCommand="{Binding Filter.AddCustomFolderCommand}"
+                               IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}" />
+                    </Border>
+                    <Button Grid.Column="1" Style="{StaticResource ToggleAllBtn}" Text="+ Add"
+                            Command="{Binding Filter.AddCustomFolderCommand}"
+                            IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                            ToolTipProperties.Text="Add this folder name to the exclusion list" />
+                </Grid>
+
+                <!-- ── ITEM 4: From this repo ── -->
+                <VerticalStackLayout IsVisible="{Binding Filter.HasFetchedFolders}" Spacing="0" Margin="0,10,0,0">
+
+                    <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Margin="0,0,0,8" />
+
+                    <!-- Sub-header -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <HorizontalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
+                            <Label Text="{Binding Filter.FetchedFoldersCountLabel}"
+                                   Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                            <Label Text="ⓘ" TextColor="{StaticResource AccentPrimary}" FontSize="14" VerticalOptions="Center">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                          CommandParameter="Top-level folders found in the last fetch. Tap ○ to exclude a folder — it is added to the chips above. Tap ✕ again to re-include." />
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </HorizontalStackLayout>
+                        <Label Grid.Column="1"
+                               Text="{Binding Filter.IsFetchedFoldersExpanded, Converter={StaticResource ExpandArrowConv}}"
+                               TextColor="{StaticResource TextMuted}" FontSize="12" VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Filter.ToggleFetchedFoldersCommand}" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Filter.ToggleFetchedFoldersCommand}" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                    <!-- Folder list rows -->
+                    <VerticalStackLayout IsVisible="{Binding Filter.IsFetchedFoldersExpanded}" Spacing="0" Margin="0,4,0,0">
+                        <BindableLayout.ItemsSource>
+                            <Binding Path="Filter.FetchedFolders" />
+                        </BindableLayout.ItemsSource>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:FetchedFolderEntry">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="4,5" ColumnSpacing="8">
+
+                                    <!-- Toggle icon -->
+                                    <Label Grid.Column="0"
+                                           Text="{Binding ExcludeIcon}"
+                                           TextColor="{Binding ExcludeIconColor}"
+                                           FontSize="14"
+                                           VerticalOptions="Center"
+                                           WidthRequest="22"
+                                           HorizontalTextAlignment="Center">
+                                        <Label.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={x:Reference Self}, Path=BindingContext.Filter.ToggleFetchedFolderCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Label.GestureRecognizers>
+                                    </Label>
+
+                                    <!-- Folder name -->
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           TextColor="{StaticResource TextSecondary}"
+                                           FontSize="13"
+                                           VerticalOptions="Center">
+                                        <Label.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={x:Reference Self}, Path=BindingContext.Filter.ToggleFetchedFolderCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Label.GestureRecognizers>
+                                    </Label>
+
+                                    <!-- File count badge -->
+                                    <Label Grid.Column="2"
+                                           Text="{Binding FileCountLabel}"
+                                           TextColor="{StaticResource TextDim}"
+                                           FontSize="11"
+                                           VerticalOptions="Center" />
+
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </Border>
+    </ContentView.Content>
+
+</ContentView>

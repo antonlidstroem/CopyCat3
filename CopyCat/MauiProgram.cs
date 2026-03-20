@@ -19,7 +19,7 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // ── HTTP client (GitHub API) ──────────────────────────────────────────
+        // ── HTTP client ───────────────────────────────────────────────────────
         builder.Services.AddHttpClient("github", client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5);
@@ -31,30 +31,35 @@ public static class MauiProgram
             MaxAutomaticRedirections = 5,
         });
 
-        // ── Services ──────────────────────────────────────────────────────────
+        // ── Infrastructure services ───────────────────────────────────────────
         builder.Services.AddSingleton<IGitHubService,    GitHubService>();
         builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
         builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
         builder.Services.AddSingleton<IShareService,     MauiShareService>();
         builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
 
-        // ── Database (ISP split) ──────────────────────────────────────────────
-        // DatabaseService implements both IRepoRepository and IPromptRepository
-        // from a single shared SQLite connection.  Registering it as a singleton
-        // first, then aliasing both interfaces to the same instance, ensures:
-        //   • One DB connection for the lifetime of the app.
-        //   • RepositoryViewModel depends on IRepoRepository only.
-        //   • PromptsViewModel    depends on IPromptRepository only.
-        //   • Neither can accidentally call the other domain's data layer.
+        // ── Database (ISP split: one concrete, two interface registrations) ───
         builder.Services.AddSingleton<DatabaseService>();
         builder.Services.AddSingleton<IRepoRepository>  (sp => sp.GetRequiredService<DatabaseService>());
         builder.Services.AddSingleton<IPromptRepository>(sp => sp.GetRequiredService<DatabaseService>());
 
-        // ── UI ────────────────────────────────────────────────────────────────
-        // PromptsPage is NOT registered here: it is instantiated on-demand in
-        // MainPage.xaml.cs via Navigation.PushAsync(new PromptsPage(viewModel)).
-        // This avoids DI singleton lifecycle conflicts with the Navigation stack.
+        // ── Child ViewModels (singletons — share lifetime with the app) ───────
+        //
+        // Registration order matters for constructor injection:
+        // ChunkingViewModel depends on RepositoryViewModel + FilterViewModel,
+        // so those must be registered first.
+        builder.Services.AddSingleton<RepositoryViewModel>();
+        builder.Services.AddSingleton<FilterViewModel>();
+        builder.Services.AddSingleton<PromptsViewModel>();
+        builder.Services.AddSingleton<ChunkListViewModel>();
+        builder.Services.AddSingleton<ChunkingViewModel>();   // depends on Repo + Filter
+
+        // ── Orchestrator ──────────────────────────────────────────────────────
         builder.Services.AddSingleton<MainViewModel>();
+
+        // ── UI ────────────────────────────────────────────────────────────────
+        // PromptsPage is instantiated on-demand in MainPage.xaml.cs via
+        // Navigation.PushAsync(new PromptsPage(viewModel.Prompts)).
         builder.Services.AddSingleton<MainPage>();
 
 #if DEBUG

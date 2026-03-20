@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MainPage.xaml — Phase 5: ContentView compositor
+  ═══════════════════════════════════════════════════════════════════════════
+  This file is now a thin shell.  All card content lives in separate files:
+
+  Configuration/
+    RepositoryCard.xaml      URL, branch, token, saved repos
+    FileTypesCard.xaml       Extension chips + Auto-detect
+    FoldersCard.xaml         Folder exclusion chips
+    FilePatternsCard.xaml    Pattern exclusions + fetched-file browser
+    PromptsQuickCard.xaml    Compact prompt selector
+    TokenSliderCard.xaml     Token slider + presets
+
+  Results/
+    StatsBar.xaml            Files / projects / chunks / tokens summary
+    ChunkListView.xaml       Search bar + chunk cards
+    ActionBar.xaml           Chunk button / results toolbar / selection toolbar
+
+  BindingContext for all ContentViews is inherited from this page (MainViewModel).
+  DataTemplate commands reference {x:Reference Self} (the ContentView) rather
+  than {x:Reference ThisPage}, which is why no x:Name is needed here.
+
+  ANDROID PERFORMANCE NOTE
+  ─────────────────────────
+  No CollectionView is nested inside the outer ScrollView.
+  All lists use BindableLayout on VerticalStackLayout (see card files).
+-->
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:CopyCat.ViewModels"
+    xmlns:cfg="clr-namespace:CopyCat.Views.Configuration"
+    xmlns:res="clr-namespace:CopyCat.Views.Results"
+    x:Class="CopyCat.MainPage"
+    x:DataType="vm:MainViewModel"
+    BackgroundColor="{StaticResource BgApp}">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- ── ROW 0 — Scrollable content ───────────────────────────────── -->
+        <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Default">
+            <VerticalStackLayout Padding="14,14,14,8" Spacing="0">
+
+                <!-- ══ CONFIGURATION PANEL ══════════════════════════════════ -->
+                <VerticalStackLayout IsVisible="{Binding Chunking.IsConfigurationMode}" Spacing="0">
+                    <cfg:RepositoryCard />
+                    <cfg:FileTypesCard />
+                    <cfg:FoldersCard />
+                    <cfg:FilePatternsCard />
+                    <cfg:PromptsQuickCard />
+                    <cfg:TokenSliderCard />
+
+                    <!-- Config-mode error banner (not a card; lives at panel level) -->
+                    <Border Style="{StaticResource ErrorBorder}" IsVisible="{Binding Chunking.HasError}">
+                        <Grid ColumnDefinitions="28,*" ColumnSpacing="8">
+                            <Label Grid.Column="0" Text="⚠️" FontSize="18" VerticalOptions="Start" />
+                            <Label Grid.Column="1" Text="{Binding Chunking.ErrorText}"
+                                   Style="{StaticResource ErrorLabel}" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- ══ RESULTS PANEL ════════════════════════════════════════ -->
+                <VerticalStackLayout IsVisible="{Binding Chunking.IsResultsMode}" Spacing="0">
+
+                    <!-- Busy spinner (shown while fetch is in progress) -->
+                    <VerticalStackLayout IsVisible="{Binding Chunking.IsBusy}"
+                                         HorizontalOptions="Center"
+                                         Spacing="10" Margin="0,0,0,10">
+                        <ActivityIndicator IsRunning="{Binding Chunking.IsBusy}"
+                                           Color="{StaticResource ActivityIndicatorColor}"
+                                           HeightRequest="36" WidthRequest="36"
+                                           HorizontalOptions="Center" />
+                        <Label Text="{Binding Chunking.StatusText}"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="14" HorizontalOptions="Center"
+                               HorizontalTextAlignment="Center"
+                               LineBreakMode="WordWrap" />
+                    </VerticalStackLayout>
+
+                    <!-- Results-mode error banner -->
+                    <Border Style="{StaticResource ErrorBorder}" IsVisible="{Binding Chunking.HasError}">
+                        <Grid ColumnDefinitions="28,*" ColumnSpacing="8">
+                            <Label Grid.Column="0" Text="⚠️" FontSize="18" VerticalOptions="Start" />
+                            <Label Grid.Column="1" Text="{Binding Chunking.ErrorText}"
+                                   Style="{StaticResource ErrorLabel}" />
+                        </Grid>
+                    </Border>
+
+                    <res:StatsBar />
+                    <res:ChunkListView />
+
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ── ROW 1 — Smart action bar ─────────────────────────────────── -->
+        <res:ActionBar Grid.Row="1" />
+
+    </Grid>
+</ContentPage>

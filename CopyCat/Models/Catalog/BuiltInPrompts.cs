@@ -1,30 +1,23 @@
 namespace CopyCat.Models.Catalog;
 
 /// <summary>
-/// The six factory-default AI prompts shipped with CopyCat.
+/// The eight factory-default AI prompts shipped with CopyCat.
 ///
 /// STABLE SORT ORDERS
 /// ──────────────────
-/// Each prompt has a fixed <c>SortOrder</c> (1–6) that never changes,
-/// even after the user edits the prompt's text.  This lets the workspace-
-/// restore feature re-select the correct prompt by sort order even after a
-/// "Reset all prompts" operation regenerates the DB rows with new IDs.
+/// Each prompt has a fixed SortOrder (1–8) that never changes, even after
+/// the user edits the prompt's text. This lets workspace-restore reliably
+/// re-select the correct prompt by sort order after a DB reset.
 ///
-/// USAGE
-/// ─────
-/// <c>BuiltInPrompts.BySortOrder.TryGetValue(order, out var seed)</c>
-/// returns the original title + content for a ResetSinglePrompt operation.
-///
-/// The database service uses <see cref="All"/> to seed the DB on first run.
+/// MIGRATION: Users upgrading from v1 (6 prompts) will have 7 and 8
+/// automatically added by DatabaseService.SeedPromptsIfEmptyAsync — which
+/// now seeds any MISSING built-ins rather than only running when the table
+/// is empty. No data is lost.
 /// </summary>
 public static class BuiltInPrompts
 {
-    /// <summary>
-    /// Immutable seed record for a single built-in prompt.
-    /// </summary>
     public sealed record PromptSeed(int SortOrder, string Title, string Content);
 
-    /// <summary>All six built-in prompts in display order.</summary>
     public static readonly IReadOnlyList<PromptSeed> All =
     [
         new(1,
@@ -58,12 +51,45 @@ public static class BuiltInPrompts
             "Based on the following code, suggest a comprehensive set of unit tests. "
             + "Cover happy paths, edge cases, and failure modes. "
             + "Use xUnit + FluentAssertions style.\n\n[PASTE CHUNK]"),
+
+        // ── Multi-role prompts (added in v2) ──────────────────────────────────
+
+        new(7,
+            "Multi-Perspective Review",
+            "Please analyse the following code from three expert perspectives in sequence.\n\n"
+            + "<code_review>\n"
+            + "Act as a Senior Developer. Review for correctness, naming, readability, and "
+            + "obvious bugs. Flag any code smells or anti-patterns.\n"
+            + "</code_review>\n\n"
+            + "<security_review>\n"
+            + "Act as a Security Engineer. Identify vulnerabilities: injection risks, "
+            + "authentication flaws, insecure data handling, exposed secrets, and OWASP Top-10 patterns.\n"
+            + "</security_review>\n\n"
+            + "<performance_review>\n"
+            + "Act as a Performance Engineer. Identify bottlenecks: unnecessary allocations, "
+            + "N+1 queries, blocking async calls, and missing caching opportunities.\n"
+            + "</performance_review>\n\n"
+            + "Conclude with a prioritised list of the top 5 improvements across all three perspectives.\n\n"
+            + "[PASTE CHUNK]"),
+
+        new(8,
+            "Architect + Implementer",
+            "Review the following code wearing two hats in sequence.\n\n"
+            + "<architect>\n"
+            + "Assess structural decisions: SOLID compliance, separation of concerns, dependency direction, "
+            + "and domain boundary clarity. Identify over-coupling and missing abstractions.\n"
+            + "</architect>\n\n"
+            + "<implementer>\n"
+            + "Identify implementation-level issues the architect might miss: null-reference risks, "
+            + "missing error handling, resource leaks, incorrect async usage, and edge-case failures.\n"
+            + "</implementer>\n\n"
+            + "<synthesis>\n"
+            + "Summarise the three most impactful improvements that address findings from both perspectives. "
+            + "For each, state: What to change, Why it matters, and Rough effort (small/medium/large).\n"
+            + "</synthesis>\n\n"
+            + "[PASTE CHUNK]"),
     ];
 
-    /// <summary>
-    /// Fast lookup by <c>SortOrder</c> for the reset-single-prompt feature.
-    /// Key = SortOrder (1–6).  Value = the original seed.
-    /// </summary>
     public static readonly IReadOnlyDictionary<int, PromptSeed> BySortOrder =
         All.ToDictionary(p => p.SortOrder);
 }

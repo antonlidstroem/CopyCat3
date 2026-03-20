@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:CopyCat.ViewModels"
+    xmlns:models="clr-namespace:CopyCat.Models"
+    x:Class="CopyCat.Views.Configuration.RepositoryCard"
+    x:DataType="vm:MainViewModel"
+    x:Name="Self">
+
+    <ContentView.Content>
+        <Border Style="{StaticResource Card}">
+            <VerticalStackLayout Spacing="0">
+
+                <!-- Header row -->
+                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                    <Label Grid.Column="0" Text="REPOSITORY" Style="{StaticResource SectionTitle}"
+                           Margin="0" VerticalOptions="Center" />
+                    <Button Grid.Column="1"
+                            Text="💾 Save workspace"
+                            Style="{StaticResource SmallIconBtn}"
+                            Command="{Binding Repo.SaveWorkspaceCommand}"
+                            IsVisible="{Binding Repo.HasSelectedRepo}"
+                            ToolTipProperties.Text="Save current filters, token limit and prompt as defaults for this repo." />
+                </Grid>
+
+                <!-- URL field -->
+                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4" ColumnSpacing="6">
+                    <Label Grid.Column="0" Text="GitHub URL or local path"
+                           Style="{StaticResource FieldLabel}" Margin="0" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="ⓘ"
+                           TextColor="{StaticResource AccentPrimary}" FontSize="16" VerticalOptions="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                  CommandParameter="Paste a GitHub repo URL (https://github.com/owner/repo) or a local folder path (e.g. C:\Projects\MyApp or /Users/me/code). Tap 📋 to paste from clipboard." />
+                        </Label.GestureRecognizers>
+                    </Label>
+                </Grid>
+
+                <Border Style="{StaticResource InputBorder}" Margin="0,0,0,4">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <Entry Grid.Column="0" Style="{StaticResource InputEntry}"
+                               Text="{Binding Repo.RepoUrl}"
+                               Placeholder="https://github.com/owner/repo  or  C:\Projects"
+                               Keyboard="Url" ReturnType="Next" Margin="4,0,0,0"
+                               IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}" />
+                        <Button Grid.Column="1" Style="{StaticResource IconBtn}" Text="✕"
+                                Command="{Binding Repo.ClearUrlCommand}"
+                                IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                ToolTipProperties.Text="Clear URL field" />
+                        <Button Grid.Column="2" Style="{StaticResource IconBtn}" Text="📋"
+                                Command="{Binding Repo.PasteUrlCommand}"
+                                IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                ToolTipProperties.Text="Paste URL from clipboard" />
+                    </Grid>
+                </Border>
+
+                <!-- ITEM 3: Local path guidance banner -->
+                <Border BackgroundColor="#0D1A2B"
+                        Stroke="#2563EB"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="12,8"
+                        Margin="0,0,0,8"
+                        IsVisible="{Binding Repo.IsLocalPath}">
+                    <Label Text="{Binding Repo.LocalPathGuidanceText}"
+                           TextColor="#93C5FD"
+                           FontSize="12"
+                           LineBreakMode="WordWrap" />
+                </Border>
+
+                <!-- ── Saved repos ── -->
+                <VerticalStackLayout IsVisible="{Binding Repo.HasSavedRepos}" Spacing="0">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,6">
+                        <Label Grid.Column="0" Text="Recent repositories"
+                               Style="{StaticResource FieldLabel}" Margin="0" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource SmallIconBtn}" Text="✎ Rename"
+                                Command="{Binding Repo.RenameSelectedRepoCommand}"
+                                IsVisible="{Binding Repo.HasSelectedRepo}"
+                                IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                ToolTipProperties.Text="Give this repository a friendly display name" />
+                        <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="✕"
+                                Command="{Binding Repo.ClearSelectedRepoCommand}"
+                                IsVisible="{Binding Repo.HasSelectedRepo}"
+                                IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                ToolTipProperties.Text="Deselect this repository" />
+                    </Grid>
+
+                    <!-- ITEM 2: Expandable repo rows via SavedRepoDisplayItems -->
+                    <Border Style="{StaticResource SavedReposListBorder}">
+                        <VerticalStackLayout Spacing="0">
+                            <BindableLayout.ItemsSource>
+                                <Binding Path="Repo.SavedRepoDisplayItems" />
+                            </BindableLayout.ItemsSource>
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="models:SavedRepoDisplayItem">
+
+                                    <!-- Outer wrapper: main row + expandable summary row -->
+                                    <VerticalStackLayout Spacing="0">
+
+                                        <!-- Main row: name | workspace dot | expand | delete -->
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" Padding="10,8" ColumnSpacing="4">
+
+                                            <!-- Repo name — tapping selects the repo -->
+                                            <Label Grid.Column="0" Text="{Binding DisplayName}"
+                                                   Style="{StaticResource SavedRepoRowLabel}"
+                                                   VerticalOptions="Center">
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.Repo.SelectRepoCommand}"
+                                                        CommandParameter="{Binding Repo}" />
+                                                </Label.GestureRecognizers>
+                                            </Label>
+
+                                            <!-- Workspace saved indicator dot -->
+                                            <Label Grid.Column="1"
+                                                   Text="●"
+                                                   TextColor="{StaticResource AccentSecond}"
+                                                   FontSize="8"
+                                                   VerticalOptions="Center"
+                                                   IsVisible="{Binding HasWorkspace}"
+                                                   ToolTipProperties.Text="Workspace settings saved for this repo" />
+
+                                            <!-- ITEM 2: Expand/collapse button (only shown when workspace saved) -->
+                                            <Label Grid.Column="2"
+                                                   Text="{Binding ExpandIcon}"
+                                                   TextColor="{StaticResource TextMuted}"
+                                                   FontSize="11"
+                                                   VerticalOptions="Center"
+                                                   Padding="4,0"
+                                                   IsVisible="{Binding HasWorkspace}">
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.Repo.ToggleRepoExpandCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Label.GestureRecognizers>
+                                            </Label>
+
+                                            <!-- Delete button -->
+                                            <Button Grid.Column="3" Style="{StaticResource SmallIconBtn}" Text="🗑"
+                                                    Command="{Binding Source={x:Reference Self}, Path=BindingContext.Repo.DeleteRepoCommand}"
+                                                    CommandParameter="{Binding Repo}"
+                                                    ToolTipProperties.Text="Remove from recent list" />
+                                        </Grid>
+
+                                        <!-- ITEM 2: Expandable workspace summary row -->
+                                        <Border IsVisible="{Binding IsExpanded}"
+                                                BackgroundColor="#111120"
+                                                StrokeThickness="0"
+                                                Padding="14,6,14,8"
+                                                Margin="0,0,0,2">
+                                            <VerticalStackLayout Spacing="3">
+                                                <Label Text="SAVED WORKSPACE"
+                                                       TextColor="{StaticResource TextDim}"
+                                                       FontSize="10"
+                                                       FontAttributes="Bold"
+                                                       CharacterSpacing="0.5" />
+                                                <Label Text="{Binding WorkspaceSummary}"
+                                                       TextColor="{StaticResource TextSecondary}"
+                                                       FontSize="12"
+                                                       LineBreakMode="WordWrap" />
+                                                <Label Text="{Binding Branch, StringFormat='Branch: {0}'}"
+                                                       TextColor="{StaticResource TextMuted}"
+                                                       FontSize="11" />
+                                            </VerticalStackLayout>
+                                        </Border>
+
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Margin="0,8,0,10" />
+
+                <!-- Branch section — hidden for local paths (ITEM 3) -->
+                <VerticalStackLayout IsVisible="{Binding Repo.ShowBranchSection}" Spacing="0">
+                    <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,0,0,4" ColumnSpacing="6">
+                        <Label Grid.Column="0" Text="Branch" Style="{StaticResource FieldLabel}" Margin="0" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="ⓘ" TextColor="{StaticResource AccentPrimary}"
+                               FontSize="16" VerticalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Repo.ShowInfoCommand}"
+                                                      CommandParameter="Tap the branch field to open the branch picker. CopyCat tries main → master → develop as fallbacks." />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
+                    <Border Style="{StaticResource InputBorder}" Margin="0,0,0,6">
+                        <Grid HeightRequest="50">
+                            <Grid IsVisible="{Binding Repo.IsFetchingBranches, Converter={StaticResource InverseBool}}"
+                                  ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="{Binding Repo.BranchButtonLabel}"
+                                       Style="{StaticResource BranchPickerLabel}" VerticalOptions="Center" Margin="12,0,0,0">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Repo.ShowBranchPickerCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Label Grid.Column="1" Text="⇅" TextColor="{StaticResource TextMuted}"
+                                       FontSize="16" VerticalOptions="Center" Margin="0,0,12,0">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Repo.ShowBranchPickerCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Repo.ShowBranchPickerCommand}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                            <HorizontalStackLayout IsVisible="{Binding Repo.IsFetchingBranches}"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" Spacing="10">
+                                <ActivityIndicator IsRunning="{Binding Repo.IsFetchingBranches}"
+                                                   Color="{StaticResource AccentPrimary}"
+                                                   HeightRequest="20" WidthRequest="20" VerticalOptions="Center" />
+                                <Label Text="Loading branches…" TextColor="{StaticResource TextMuted}"
+                                       FontSize="13" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </Grid>
+                    </Border>
+                    <BoxView HeightRequest="1" Color="{StaticResource BorderDefault}" Margin="0,0,0,10" />
+                </VerticalStackLayout>
+
+                <!-- GitHub Token section — hidden for local paths (ITEM 3) -->
+                <VerticalStackLayout IsVisible="{Binding Repo.ShowTokenSection}" Spacing="0">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,4" ColumnSpacing="6">
+                        <Label Grid.Column="0" Text="GitHub Token (private repos)"
+                               Style="{StaticResource FieldLabel}" Margin="0" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="ⓘ" TextColor="{StaticResource AccentPrimary}"
+                               FontSize="16" VerticalOptions="Center" Margin="2,0,0,0">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Repo.ShowTokenInfoCommand}" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <Border Grid.Column="3" Style="{StaticResource SavedTokenBorder}" IsVisible="{Binding Repo.TokenIsSaved}">
+                            <Label Text="✓ Saved" TextColor="{StaticResource AccentSecond}" FontSize="11" FontAttributes="Bold" />
+                        </Border>
+                    </Grid>
+                    <!-- ITEM 1: Token field now has both paste and clear buttons -->
+                    <Border Style="{StaticResource InputBorder}">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <Entry Grid.Column="0" Style="{StaticResource InputEntry}"
+                                   Text="{Binding Repo.AccessToken}"
+                                   Placeholder="ghp_… (leave empty for public repos)"
+                                   IsPassword="True" ReturnType="Done"
+                                   IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                   Margin="4,0,0,0" />
+                            <!-- ITEM 1: Quick paste button for token -->
+                            <Button Grid.Column="1" Style="{StaticResource IconBtn}" Text="📋"
+                                    Command="{Binding Repo.PasteTokenCommand}"
+                                    IsEnabled="{Binding Chunking.IsBusy, Converter={StaticResource InverseBool}}"
+                                    ToolTipProperties.Text="Paste token from clipboard" />
+                            <Button Grid.Column="2" Style="{StaticResource IconBtn}" Text="🗑"
+                                    Command="{Binding Repo.ClearTokenCommand}"
+                                    IsVisible="{Binding Repo.TokenIsSaved}"
+                                    ToolTipProperties.Text="Remove saved token from secure storage" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </Border>
+    </ContentView.Content>
+
+</ContentView>
