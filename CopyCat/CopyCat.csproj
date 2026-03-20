@@ -27,34 +27,52 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <MauiIcon         Include="Resources\Images\appicon.svg"      Color="#111118" />
-    <MauiSplashScreen Include="Resources\Images\appicon.svg"      Color="#111118" BaseSize="128,128" />
-    <MauiImage        Include="Resources\Images\copycat_logo.svg" />
-    <MauiFont         Include="Resources\Fonts\*" />
+    <MauiIcon Include="Resources\Images\appicon.svg" Color="#111118" />
+    <MauiSplashScreen Include="Resources\Images\appicon.svg" Color="#111118" BaseSize="128,128" />
+    <MauiImage Include="Resources\Images\copycat_logo.svg" />
+    <MauiFont Include="Resources\Fonts\*" />
     <MauiXaml Update="Resources\Styles\Converters.xaml">  <Generator>MSBuild:Compile</Generator> </MauiXaml>
     <MauiXaml Update="Resources\Styles\Styles.xaml">      <Generator>MSBuild:Compile</Generator> </MauiXaml>
     <MauiXaml Update="App.xaml">                           <Generator>MSBuild:Compile</Generator> </MauiXaml>
+    <MauiXaml Update="Views\Configuration\FilePatternsCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Configuration\FileTypesCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Configuration\FoldersCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Configuration\PromptsQuickCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Configuration\RepositoryCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Configuration\TokenSliderCard.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
     <MauiXaml Update="Views\MainPage.xaml">                <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\RepositoryCard.xaml">  <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FileTypesCard.xaml">   <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FoldersCard.xaml">     <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FilePatternsCard.xaml"><Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\PromptsQuickCard.xaml"><Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\TokenSliderCard.xaml"> <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Results\StatsBar.xaml">        <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Results\ChunkListView.xaml">   <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Results\ActionBar.xaml">       <Generator>MSBuild:Compile</Generator> </MauiXaml>
     <MauiXaml Update="Views\PromptsPage.xaml">             <Generator>MSBuild:Compile</Generator> </MauiXaml>
+    <MauiXaml Update="Views\Results\ActionBar.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Results\ChunkListView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Views\Results\StatsBar.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm"                   Version="8.4.0" />
-    <PackageReference Include="Microsoft.Extensions.Http"               Version="9.0.0" />
-    <PackageReference Include="Microsoft.Maui.Controls"                 Version="9.0.0" />
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility"   Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug"      Version="9.0.0" />
-    <PackageReference Include="sqlite-net-pcl"                          Version="1.9.172" />
-    <PackageReference Include="SQLitePCLRaw.bundle_green"               Version="2.1.8" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.8" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)'=='net9.0-windows10.0.19041.0' or '$(TargetFramework)'=='net9.0-maccatalyst'">
