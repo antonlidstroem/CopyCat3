@@ -1,99 +1,76 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using System.Text.RegularExpressions;
+using Microsoft.Maui.Graphics;
 
 namespace CopyCat.Models;
 
 /// <summary>
-/// A token-bounded slice of source files ready to be copied to an AI chat window.
+/// A token-bounded slice of source files produced by the chunking service.
 ///
-/// Card visual design (C2):
-///   Zone A (left, select area)  — background tinted amber when IsSelected.
-///   Zone B (right, copy area)   — Copy button; card border turns teal when IsCopied.
-///   Zone C (bottom, expand)     — ▼/▲ strip; always visible.
+/// Shown as a three-zone card in the Results panel.
+///   Zone A — select (tap to toggle <see cref="IsSelected"/>)
+///   Zone B — copy button
+///   Zone C — expand strip (tap to show <see cref="FileEntries"/>)
 ///
-/// Token warning (C3):
-///   ChunkWarningIcon is computed from EstimatedTokens and shown inline in Zone A.
+/// Design notes
+/// ────────────
+/// All display-helper properties are computed on the model itself rather
+/// than in the ViewModel.  This keeps the ViewModel thin and makes the
+/// helpers unit-testable without a MAUI host.
 /// </summary>
 public partial class CodeChunk : ObservableObject
 {
-    // ── Data ──────────────────────────────────────────────────────────────
+    // ── Chunk identity ────────────────────────────────────────────────────────
 
+    /// <summary>Zero-based position in the ordered chunk list.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    [NotifyPropertyChangedFor(nameof(SubLabel))]
     private int _index;
 
-    /// <summary>
-    /// Zero-based position in the chunk list.
-    /// Changing this via <see cref="NotifyIndexChanged"/> raises PropertyChanged
-    /// for DisplayLabel and SubLabel so the CollectionView updates after a merge.
-    /// </summary>
-    public int Index
-    {
-        get => _index;
-        set => _index = value;
-    }
-
-    public string ProjectName     { get; set; } = string.Empty;
-    public string Content         { get; set; } = string.Empty;
-    public int    EstimatedTokens { get; set; }
+    /// <summary>Source project name (repository or folder name).</summary>
+    public string ProjectName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Individual source files packed into this chunk.
-    /// Populated by ChunkingService — drives the per-file preview rows
-    /// and selective exclusion when copying.
+    /// Full concatenated content of all included files.
+    /// Used as the copy/share payload.
     /// </summary>
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>Approximate token count (≈ chars / 4).</summary>
+    public int EstimatedTokens { get; set; }
+
+    /// <summary>Individual files that make up this chunk.</summary>
     public List<ChunkFile> FileEntries { get; set; } = [];
 
-    // ── Observable state ──────────────────────────────────────────────────
+    // ── UI state ─────────────────────────────────────────────────────────────
 
+    /// <summary>Whether this chunk is selected for multi-select operations.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ZoneABackground))]
     [NotifyPropertyChangedFor(nameof(CardBorderColor))]
     [NotifyPropertyChangedFor(nameof(CardBorderThickness))]
-    [NotifyPropertyChangedFor(nameof(CopyButtonTextColor))]
-    private bool _isCopied;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
     private bool _isSelected;
 
+    /// <summary>Whether this chunk has been copied at least once.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderThickness))]
+    private bool _isCopied;
+
+    /// <summary>Whether the file-list expansion panel is open.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewToggleIcon))]
     private bool _isPreviewExpanded;
 
-    // ── C2: Three-zone card colours ────────────────────────────────────────
-    //
-    // Zone A background: amber tint when selected (IsSelected).
-    //   Selected  → #1C1406 (AccentPrimary at ~11% on C1Deep)
-    //   Default   → C2Surface (#0D2128)
-    //   Copied does NOT change Zone A — only the card border changes.
-    //
-    // Card border: teal (C5) at 2.5px when copied, C3Border at 1.5px otherwise.
-    //   Both copied+selected: teal border + amber Zone A (they coexist).
+    // ── Computed display helpers ──────────────────────────────────────────────
 
-    /// <summary>Zone A (select area) background color.</summary>
-    public Color ZoneABackground =>
-        IsSelected ? Color.FromArgb("#1C1406") : Color.FromArgb("#0D2128");
+    /// <summary>Primary label: "Chunk N · ProjectName".</summary>
+    public string DisplayLabel => $"Chunk {Index + 1}  ·  {ProjectName}";
 
-    /// <summary>Full card border color — teal when copied, structural border otherwise.</summary>
-    public Color CardBorderColor =>
-        IsCopied ? Color.FromArgb("#00B4BC") : Color.FromArgb("#1A3D4A");
+    /// <summary>Secondary label: approximate token count.</summary>
+    public string SubLabel => $"~{EstimatedTokens:N0} tokens";
 
-    /// <summary>Card border thickness — heavier when copied to signal completion.</summary>
-    public double CardBorderThickness => IsCopied ? 2.5 : 1.5;
-
-    /// <summary>Copy button text tint — teal when copied, dim when not.</summary>
-    public Color CopyButtonTextColor =>
-        IsCopied ? Color.FromArgb("#00B4BC") : Color.FromArgb("#1A3D4A");
-
-    // ── C3: Token context warning ──────────────────────────────────────────
-
-    /// <summary>
-    /// Warning icon shown next to the token count in Zone A.
-    /// Helps the developer identify oversized chunks before pasting.
-    ///   ⛔ > 128,000 tokens — exceeds Claude.ai context window
-    ///   ⚠️ >  32,000 tokens — too large for GPT-3.5
-    ///   ℹ️ >  16,000 tokens — above GPT-3.5 but fine for GPT-4/Claude/Gemini
-    ///   ""  ≤  16,000 tokens — fits all major AI interfaces
-    /// </summary>
+    /// <summary>Warning icon shown when the chunk is very large.</summary>
     public string ChunkWarningIcon => EstimatedTokens switch
     {
         > 128_000 => "⛔",
@@ -102,49 +79,33 @@ public partial class CodeChunk : ObservableObject
         _         => string.Empty,
     };
 
-    // ── C5: Index change notification ─────────────────────────────────────
+    /// <summary>Icon on the Zone C expand strip.</summary>
+    public string PreviewToggleIcon => IsPreviewExpanded ? "▲  files" : "▼  files";
+
+    /// <summary>Background of Zone A (selection area).</summary>
+    public Color ZoneABackground =>
+        IsSelected
+            ? Color.FromArgb("#0D2A2B")   // teal tint when selected
+            : Colors.Transparent;
+
+    /// <summary>Card border colour driven by copy and selection state.</summary>
+    public Color CardBorderColor =>
+        IsSelected ? Color.FromArgb("#00B4BC") :
+        IsCopied   ? Color.FromArgb("#1F4D1F") :
+                     Color.FromArgb("#2D2D3A");
+
+    /// <summary>Border thickness — thicker when selected.</summary>
+    public double CardBorderThickness => IsSelected ? 1.5 : 0.8;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Call this after changing <see cref="Index"/> directly (e.g. after MergeSelected
-    /// renumbers all chunks) so the CollectionView updates DisplayLabel and SubLabel.
+    /// Raises change notifications for all index-derived display labels
+    /// after a merge/reorder operation updates <see cref="Index"/>.
     /// </summary>
     public void NotifyIndexChanged()
     {
         OnPropertyChanged(nameof(DisplayLabel));
         OnPropertyChanged(nameof(SubLabel));
     }
-
-    // ── Labels ────────────────────────────────────────────────────────────
-
-    public string DisplayLabel => $"Chunk {Index + 1}  ·  {ProjectName}";
-    public string SubLabel     => $"~{EstimatedTokens:N0} tokens";
-
-    public string PreviewToggleIcon => IsPreviewExpanded ? "▲" : "▼";
-
-    /// <summary>
-    /// Newline-joined file names for backwards compatibility.
-    /// The new UI uses FileEntries directly via a BindableLayout.
-    /// Kept for sessions where FileEntries is empty (loaded from older data).
-    /// </summary>
-    public string PreviewSnippet
-    {
-        get
-        {
-            if (FileEntries.Count > 0)
-                return string.Join("\n", FileEntries.Select(f => f.FileName));
-
-            var names = HeaderRegex()
-                .Matches(Content)
-                .Select(m => m.Groups["path"].Value.Trim())
-                .Select(p => p.Replace('\\', '/'))
-                .Select(p => p.Contains('/') ? p[(p.LastIndexOf('/') + 1)..] : p)
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .ToList();
-
-            return names.Count == 0 ? string.Empty : string.Join("\n", names);
-        }
-    }
-
-    [GeneratedRegex(@"^====\s+(?<path>.+?)\s+====$", RegexOptions.Multiline)]
-    private static partial Regex HeaderRegex();
 }

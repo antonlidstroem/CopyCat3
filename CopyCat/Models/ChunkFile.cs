@@ -1,59 +1,63 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Maui.Graphics;
 
 namespace CopyCat.Models;
 
 /// <summary>
-/// Represents a single source file that was packed into a <see cref="CodeChunk"/>.
-/// Drives the per-file preview rows inside the chunk card:
-///   - Tap the file name  → toggle the inline code viewer (IsCodeExpanded)
-///   - Tap the icon       → exclude / re-include the file from the copied output (IsExcluded)
+/// Represents one source file within a <see cref="CodeChunk"/>.
+///
+/// Shown in the expanded file-list section of a chunk card (Zone C).
+/// The user can:
+///   • Exclude/include individual files from the copy payload.
+///   • Expand inline to preview the raw file content.
 /// </summary>
 public partial class ChunkFile : ObservableObject
 {
-    // ── Data ──────────────────────────────────────────────────────────────
+    // ── Data ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Relative path as it appears in the repository (e.g. "src/App.cs").</summary>
-    public string Path    { get; set; } = string.Empty;
+    /// <summary>Full path of the file (repo-root-relative, forward slashes).</summary>
+    public string Path { get; set; } = string.Empty;
 
-    /// <summary>Full text content of the file.</summary>
+    /// <summary>File name without directory (display label in the list row).</summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>Raw file content (used for the inline code preview).</summary>
     public string Content { get; set; } = string.Empty;
 
-    // ── UI state ──────────────────────────────────────────────────────────
+    // ── UI state ─────────────────────────────────────────────────────────────
 
-    /// <summary>When true the inline code viewer is shown below this file row.</summary>
+    /// <summary>
+    /// Whether this file is excluded from the chunk copy payload.
+    /// Excluded files are skipped by <c>BuildChunkContent()</c>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExcludeIcon))]
+    [NotifyPropertyChangedFor(nameof(ExcludeIconColor))]
+    [NotifyPropertyChangedFor(nameof(RowBackground))]
+    private bool _isExcluded;
+
+    /// <summary>Whether the inline code preview is expanded.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ExpandIcon))]
     private bool _isCodeExpanded;
 
-    /// <summary>
-    /// When true this file is skipped when the chunk is copied to clipboard.
-    /// The row background turns red to signal exclusion.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RowBackground))]
-    [NotifyPropertyChangedFor(nameof(ExcludeIcon))]
-    [NotifyPropertyChangedFor(nameof(ExcludeIconColor))]
-    private bool _isExcluded;
+    // ── Computed display helpers ──────────────────────────────────────────────
 
-    // ── Derived ───────────────────────────────────────────────────────────
-
-    /// <summary>Just the file name without directory (e.g. "App.cs").</summary>
-    public string FileName =>
-        string.IsNullOrEmpty(Path)
-            ? string.Empty
-            : System.IO.Path.GetFileName(Path.Replace('\\', '/'));
-
-    /// <summary>Row background tint — red when excluded, transparent otherwise.</summary>
-    public Color RowBackground =>
-        IsExcluded ? Color.FromArgb("#2A0D0D") : Colors.Transparent;
-
-    /// <summary>○ when included, ✕ when excluded.</summary>
+    /// <summary>Toggle icon for the exclude/include control.</summary>
     public string ExcludeIcon => IsExcluded ? "✕" : "○";
 
-    /// <summary>Red when excluded, dim teal when included.</summary>
+    /// <summary>Colour of the exclude icon.</summary>
     public Color ExcludeIconColor =>
-        IsExcluded ? Color.FromArgb("#EF4444") : Color.FromArgb("#1A3D4A");
+        IsExcluded
+            ? Color.FromArgb("#EF4444")   // TextError
+            : Color.FromArgb("#6B7280");  // TextMuted
 
-    /// <summary>▲/▼ for the code-expand chevron.</summary>
+    /// <summary>Row background tint when the file is excluded.</summary>
+    public Color RowBackground =>
+        IsExcluded
+            ? Color.FromArgb("#2A1515")
+            : Colors.Transparent;
+
+    /// <summary>Chevron icon for the code-expand toggle.</summary>
     public string ExpandIcon => IsCodeExpanded ? "▲" : "▼";
 }

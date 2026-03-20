@@ -1,20 +1,24 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:styles="clr-namespace:CopyCat.Resources.Styles"
-             x:Class="CopyCat.App">
+<?xml version="1.0" encoding="utf-8" ?>
+<Application
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CopyCat.App">
+
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+
                 <!--
-                    IMPORTANT: Styles.xaml has x:Class="CopyCat.Resources.Styles.Styles",
-                    which makes it a compiled class. A compiled ResourceDictionary MUST be
-                    merged by instantiating its type (like below), NOT via Source="...".
-                    Using Source="..." with an x:Class dictionary causes all StaticResource
-                    lookups to fail at runtime with "StaticResource not found".
+                  Converters.xaml MUST come before Styles.xaml.
+                  Styles.xaml may reference converter keys (e.g. in triggers
+                  or style setters); if converters aren't registered first
+                  those references throw XamlParseException at startup.
                 -->
-                <styles:Styles />
+                <ResourceDictionary Source="Resources/Styles/Converters.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
+
 </Application>

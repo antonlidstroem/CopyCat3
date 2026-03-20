@@ -9,37 +9,53 @@
     <SingleProject>true</SingleProject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
     <ApplicationTitle>CopyCat</ApplicationTitle>
     <ApplicationId>com.devtools.copycat</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
+
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
+  <!-- ── Android Release: trimmer configuration (see Phase 1 notes) ─────── -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+    <TrimmerRootDescriptor>$(MSBuildProjectDirectory)\Linker.xml</TrimmerRootDescriptor>
+    <MetadataUpdaterSupport Condition="'$(Configuration)' == 'Release'">false</MetadataUpdaterSupport>
+    <EnableProguard>false</EnableProguard>
+  </PropertyGroup>
+
+  <!-- ── MAUI resources ────────────────────────────────────────────────── -->
   <ItemGroup>
-    <MauiIcon Include="Resources\Images\appicon.svg" Color="#111118" />
-    <MauiSplashScreen Include="Resources\Images\appicon.svg" Color="#111118" BaseSize="128,128" />
-    <MauiImage Include="Resources\Images\copycat_logo.svg" />
-    <MauiFont Include="Resources\Fonts\*" />
-    <MauiXaml Update="Resources\Styles\Styles.xaml">
+    <MauiIcon         Include="Resources\Images\appicon.svg"      Color="#111118" />
+    <MauiSplashScreen Include="Resources\Images\appicon.svg"      Color="#111118" BaseSize="128,128" />
+    <MauiImage        Include="Resources\Images\copycat_logo.svg" />
+    <MauiFont         Include="Resources\Fonts\*" />
+
+    <!-- Styles must be compiled so StaticResource keys resolve at build time -->
+    <MauiXaml Update="Resources\Styles\Converters.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <MauiXaml Update="MainPage.xaml">
+    <MauiXaml Update="Resources\Styles\Styles.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
     <MauiXaml Update="App.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <!-- PromptsPage: instantiated on-demand in MainPage.xaml.cs -->
+    <MauiXaml Update="MainPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
     <MauiXaml Update="Views\PromptsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
   </ItemGroup>
 
+  <!-- ── NuGet packages ────────────────────────────────────────────────── -->
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm"                   Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.Http"               Version="9.0.0" />
@@ -50,8 +66,9 @@
     <PackageReference Include="SQLitePCLRaw.bundle_green"               Version="2.1.8" />
   </ItemGroup>
 
+  <!-- LibGit2Sharp bundles native blobs — desktop only, never Android/iOS -->
   <ItemGroup Condition="'$(TargetFramework)'=='net9.0-windows10.0.19041.0' or '$(TargetFramework)'=='net9.0-maccatalyst'">
-    <PackageReference Include="LibGit2Sharp" Version="0.30.*"/>
+    <PackageReference Include="LibGit2Sharp" Version="0.30.*" />
   </ItemGroup>
 
 </Project>

@@ -1,8 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  network_security_config.xml
+  ===========================
+  Android 9 (API 28)+ blocks all cleartext (HTTP) traffic by default.
+  This config:
+    1. Explicitly permits only HTTPS to the GitHub domains CopyCat uses.
+    2. Prevents any accidental cleartext leak to other hosts.
+    3. Allows the system certificate store (no certificate pinning needed
+       because GitHub rotates certs frequently and pinning would break the app).
+
+  Referenced from AndroidManifest.xml:
+    android:networkSecurityConfig="@xml/network_security_config"
+-->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
+  <domain-config cleartextTrafficPermitted="false">
+
+    <!-- GitHub REST API — FetchFilesAsync, FetchBranchesAsync, DetectFileTypesInRepoAsync -->
+    <domain includeSubdomains="true">api.github.com</domain>
+
+    <!-- GitHub web — for URL validation and redirect following -->
+    <domain includeSubdomains="true">github.com</domain>
+
+    <!-- Raw content — used when fetching individual file blobs -->
+    <domain includeSubdomains="true">raw.githubusercontent.com</domain>
+
+  </domain-config>
 </network-security-config>

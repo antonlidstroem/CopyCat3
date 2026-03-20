@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Converters.xaml
+  ═══════════════════════════════════════════════════════════════════════════
+  Central registration point for every IValueConverter in CopyCat.
+
+  SPLIT BY CONCERN
+  ────────────────
+  Converter implementations live in five focused files in CopyCat/Converters/:
+
+    BoolConverters.cs    → InverseBoolConverter
+    TextConverters.cs    → StringNotEmptyConverter
+    ChipConverters.cs    → ChipIncluded*, ChipExcluded*, ChipLabelColor*
+    ChunkConverters.cs   → ExpandArrowConverter, SelectionHintConverter
+    PromptConverters.cs  → PromptBorderConverter, SelectionDot*
+
+  This file is the ONLY place that assigns x:Key names.  If a key needs
+  to change (unlikely), it changes here once rather than in every .cs file.
+
+  MERGE POINT
+  ───────────
+  Merged by App.xaml:
+    <ResourceDictionary.MergedDictionaries>
+      <ResourceDictionary Source="Resources/Styles/Converters.xaml" />
+      <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+  LINKER SAFETY
+  ─────────────
+  All converter types are preserved by Linker.xml via:
+    <namespace name="CopyCat.Converters" />
+  This prevents the .NET trimmer from stripping them in Release builds.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:conv="clr-namespace:CopyCat.Converters">
+
+    <!-- ── Bool ──────────────────────────────────────────────────────────── -->
+
+    <!--
+      InverseBool
+      Used on: every IsVisible/IsEnabled that needs the opposite of a bool binding.
+      Example: IsVisible="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+    -->
+    <conv:InverseBoolConverter x:Key="InverseBool" />
+
+    <!-- ── Text ──────────────────────────────────────────────────────────── -->
+
+    <!--
+      StringNotEmptyConv
+      Used on: clear-search button visibility, search result label visibility.
+      Example: IsVisible="{Binding ChunkSearchText, Converter={StaticResource StringNotEmptyConv}}"
+    -->
+    <conv:StringNotEmptyConverter x:Key="StringNotEmptyConv" />
+
+    <!-- ── Chip — Included (file-type chips, green family) ───────────────── -->
+
+    <!--
+      ChipIncludedBgConv
+      true  = active/included → teal background
+      false = inactive        → dark background
+    -->
+    <conv:ChipIncludedBgConverter x:Key="ChipIncludedBgConv" />
+
+    <!--
+      ChipIncludedBorderConv
+      true  = active/included → teal border
+      false = inactive        → dim border
+    -->
+    <conv:ChipIncludedBorderConverter x:Key="ChipIncludedBorderConv" />
+
+    <!-- ── Chip — Excluded (folder/pattern chips, red family) ────────────── -->
+
+    <!--
+      ChipExcludedBgConv
+      true  = active/excluded → red background
+      false = inactive        → dark background
+    -->
+    <conv:ChipExcludedBgConverter x:Key="ChipExcludedBgConv" />
+
+    <!--
+      ChipExcludedBorderConv
+      true  = active/excluded → red border
+      false = inactive        → dim border
+    -->
+    <conv:ChipExcludedBorderConverter x:Key="ChipExcludedBorderConv" />
+
+    <!--
+      ChipLabelColorConv
+      Shared by both chip families.
+      true  = active → bright white text
+      false = inactive → muted grey text
+    -->
+    <conv:ChipLabelColorConverter x:Key="ChipLabelColorConv" />
+
+    <!-- ── Chunk ─────────────────────────────────────────────────────────── -->
+
+    <!--
+      ExpandArrowConv
+      true  = expanded → "▲"
+      false = collapsed → "▼"
+      Used on every collapsible card header chevron.
+    -->
+    <conv:ExpandArrowConverter x:Key="ExpandArrowConv" />
+
+    <!--
+      SelectionHintConv
+      true  = chunks selected → "tap card to deselect"
+      false = nothing selected → ""
+    -->
+    <conv:SelectionHintConverter x:Key="SelectionHintConv" />
+
+    <!-- ── Prompt ────────────────────────────────────────────────────────── -->
+
+    <!--
+      PromptBorderConv
+      true  = modified/custom or active → amber border
+      false = pristine built-in or inactive → teal border
+      Used on prompt cards (IsModifiedOrCustom) and the results AI PROMPT card (HasSelectedPrompt).
+    -->
+    <conv:PromptBorderConverter x:Key="PromptBorderConv" />
+
+    <!--
+      SelectionDotBgConv
+      true  = selected → filled teal circle
+      false = unselected → transparent
+    -->
+    <conv:SelectionDotBgConverter x:Key="SelectionDotBgConv" />
+
+    <!--
+      SelectionDotBorderConv
+      true  = selected → teal ring
+      false = unselected → dim grey ring
+    -->
+    <conv:SelectionDotBorderConverter x:Key="SelectionDotBorderConv" />
+
+</ResourceDictionary>

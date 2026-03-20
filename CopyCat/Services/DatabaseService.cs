@@ -1,52 +1,66 @@
 using CopyCat.Models;
+using CopyCat.Models.Catalog;
+using CopyCat.Services.Interfaces;
 using SQLite;
 
 namespace CopyCat.Services;
 
 /// <summary>
-/// SQLite-net implementation of <see cref="IDatabaseService"/>.
+/// SQLite-backed implementation of both <see cref="IRepoRepository"/>
+/// and <see cref="IPromptRepository"/>.
 ///
-/// C6 addition — workspace column migration:
-///   <see cref="MigrateWorkspaceColumnsAsync"/> adds the five new SavedRepo
-///   workspace columns to existing databases via ALTER TABLE. Each ALTER is
-///   wrapped in try-catch so the method is idempotent (safe to re-run).
+/// SINGLE CLASS, TWO INTERFACES
+/// ─────────────────────────────
+/// Both repository interfaces share one database file and one
+/// <see cref="SQLiteAsyncConnection"/>.  A single concrete class
+/// avoids the overhead of two separate connections while still
+/// letting consumers depend on only the interface they need.
+///
+/// INIT GUARD
+/// ──────────
+/// <see cref="InitializeAsync"/> is guarded by a flag so it is safe
+/// to call from both <c>RepositoryViewModel</c> and <c>PromptsViewModel</c>
+/// independently — only the first call creates the schema.
+///
+/// LINKER SAFETY
+/// ─────────────
+/// All model types (SavedRepo, PromptRecord) are preserved by Linker.xml
+/// via <c>&lt;namespace name="CopyCat.Models" /&gt;</c>.  Without this,
+/// SQLite-net's reflection-based column mapping silently returns empty
+/// objects in Android Release builds.
 /// </summary>
-public class DatabaseService : IDatabaseService, IAsyncDisposable
+public class DatabaseService : IRepoRepository, IPromptRepository
 {
     private SQLiteAsyncConnection? _db;
-    private readonly string        _dbPath;
+    private bool _initialized;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    public DatabaseService()
-    {
-        _dbPath = Path.Combine(FileSystem.AppDataDirectory, "copycat.db");
-    }
-
-    // ── Init ───────────────────────────────────────────────────────────────
+    // ── Initialisation ────────────────────────────────────────────────────────
 
     public async Task InitializeAsync()
     {
-        if (_db is not null) return;
+        if (_initialized) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_db is not null) return;
+            if (_initialized) return; // double-checked inside the lock
 
-            SQLitePCL.Batteries_V2.Init();
+            var dbPath = Path.Combine(
+                FileSystem.AppDataDirectory,
+                "copycat.db3");
 
-            var connection = new SQLiteAsyncConnection(
-                _dbPath,
-                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache);
+            _db = new SQLiteAsyncConnection(dbPath,
+                SQLiteOpenFlags.ReadWrite |
+                SQLiteOpenFlags.Create   |
+                SQLiteOpenFlags.SharedCache);
 
-            await connection.CreateTableAsync<SavedRepo>();
-            await connection.CreateTableAsync<PromptRecord>();
+            await _db.CreateTableAsync<SavedRepo>();
+            await _db.CreateTableAsync<PromptRecord>();
 
-            _db = connection;
+            await SeedPromptsIfEmptyAsync();
 
-            // Run migrations before seeding so new columns exist if needed
-            await MigrateWorkspaceColumnsAsync();
-            await SeedBuiltInPromptsIfEmptyAsync();
+            _initialized = true;
         }
         finally
         {
@@ -54,158 +68,123 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Adds the five C6 workspace columns to SavedRepos.
-    /// Each ALTER TABLE is executed in its own try-catch so that if a column
-    /// already exists (SQLite throws "duplicate column name") the error is
-    /// swallowed silently and subsequent columns are still attempted.
-    /// This makes the migration idempotent and safe to run on every launch.
-    /// </summary>
-    private async Task MigrateWorkspaceColumnsAsync()
+    private async Task SeedPromptsIfEmptyAsync()
     {
-        if (_db is null) return;
+        var count = await _db!.Table<PromptRecord>().CountAsync();
+        if (count > 0) return;
 
-        var migrations = new[]
+        foreach (var seed in BuiltInPrompts.All)
         {
-            "ALTER TABLE SavedRepos ADD COLUMN SavedMaxTokens INTEGER DEFAULT 0",
-            "ALTER TABLE SavedRepos ADD COLUMN SavedEnabledExts TEXT DEFAULT ''",
-            "ALTER TABLE SavedRepos ADD COLUMN SavedExcludedFolders TEXT DEFAULT ''",
-            "ALTER TABLE SavedRepos ADD COLUMN SavedPatterns TEXT DEFAULT ''",
-            "ALTER TABLE SavedRepos ADD COLUMN SavedPromptSortOrder INTEGER DEFAULT -1",
-        };
-
-        foreach (var sql in migrations)
-        {
-            try { await _db.ExecuteAsync(sql); }
-            catch { /* Column already exists — safe to ignore */ }
+            await _db.InsertAsync(new PromptRecord
+            {
+                Title     = seed.Title,
+                Content   = seed.Content,
+                SortOrder = seed.SortOrder,
+                IsBuiltIn = true,
+            });
         }
     }
 
-    private async Task<SQLiteAsyncConnection> Db()
-    {
-        if (_db is null) await InitializeAsync();
-        return _db ?? throw new InvalidOperationException(
-            "Database could not be initialised. Check storage permissions and available space.");
-    }
-
-    // ── Saved repos ────────────────────────────────────────────────────────
+    // ── IRepoRepository ───────────────────────────────────────────────────────
 
     public async Task<List<SavedRepo>> GetSavedReposAsync()
     {
-        var db = await Db();
-        return await db.Table<SavedRepo>()
-            .OrderByDescending(r => r.LastUsed)
+        await EnsureInitAsync();
+        return await _db!
+            .Table<SavedRepo>()
+            .OrderByDescending(r => r.Id)
             .ToListAsync();
     }
 
     public async Task<SavedRepo> UpsertRepoAsync(SavedRepo repo)
     {
-        var db = await Db();
-        repo.LastUsed = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (repo.Id == 0) await db.InsertAsync(repo);
-        else              await db.UpdateAsync(repo);
+        await EnsureInitAsync();
+        if (repo.Id == 0)
+            await _db!.InsertAsync(repo);
+        else
+            await _db!.UpdateAsync(repo);
         return repo;
     }
 
     public async Task DeleteRepoAsync(int id)
     {
-        var db = await Db();
-        await db.DeleteAsync<SavedRepo>(id);
+        await EnsureInitAsync();
+        await _db!.DeleteAsync<SavedRepo>(id);
     }
 
-    public async Task ClearAllReposAsync()
-    {
-        var db = await Db();
-        await db.DeleteAllAsync<SavedRepo>();
-    }
-
-    /// <summary>
-    /// Persists the five workspace snapshot columns without updating LastUsed.
-    /// Uses a targeted UPDATE so other fields are not accidentally overwritten.
-    /// </summary>
     public async Task UpdateRepoWorkspaceAsync(SavedRepo repo)
     {
-        var db = await Db();
-        await db.ExecuteAsync(
-            @"UPDATE SavedRepos
-              SET SavedMaxTokens        = ?,
-                  SavedEnabledExts      = ?,
-                  SavedExcludedFolders  = ?,
-                  SavedPatterns         = ?,
-                  SavedPromptSortOrder  = ?
-              WHERE Id = ?",
-            repo.SavedMaxTokens,
-            repo.SavedEnabledExts,
-            repo.SavedExcludedFolders,
-            repo.SavedPatterns,
-            repo.SavedPromptSortOrder,
-            repo.Id);
+        await EnsureInitAsync();
+        await _db!.UpdateAsync(repo);
     }
 
-    // ── Prompts ────────────────────────────────────────────────────────────
+    // ── IPromptRepository ─────────────────────────────────────────────────────
 
     public async Task<List<PromptRecord>> GetPromptsAsync()
     {
-        var db = await Db();
-        return await db.Table<PromptRecord>()
+        await EnsureInitAsync();
+        return await _db!
+            .Table<PromptRecord>()
             .OrderBy(p => p.SortOrder)
             .ToListAsync();
     }
 
-    public async Task<PromptRecord> UpsertPromptAsync(PromptRecord prompt)
+    public async Task<PromptRecord> UpsertPromptAsync(PromptRecord record)
     {
-        var db = await Db();
-        if (prompt.Id == 0) await db.InsertAsync(prompt);
-        else                await db.UpdateAsync(prompt);
-        return prompt;
+        await EnsureInitAsync();
+        if (record.Id == 0)
+            await _db!.InsertAsync(record);
+        else
+            await _db!.UpdateAsync(record);
+        return record;
     }
 
     public async Task DeletePromptAsync(int id)
     {
-        var db = await Db();
-        await db.DeleteAsync<PromptRecord>(id);
+        await EnsureInitAsync();
+        await _db!.DeleteAsync<PromptRecord>(id);
     }
 
     public async Task ResetPromptsToDefaultAsync()
     {
-        var db = await Db();
-        await db.DeleteAllAsync<PromptRecord>();
-        await SeedBuiltInPromptsAsync(db);
-    }
+        await EnsureInitAsync();
 
-    // ── Seeding ────────────────────────────────────────────────────────────
+        // Delete all custom prompts
+        await _db!.Table<PromptRecord>()
+            .Where(p => !p.IsBuiltIn)
+            .DeleteAsync();
 
-    private async Task SeedBuiltInPromptsIfEmptyAsync()
-    {
-        var db    = await Db();
-        var count = await db.Table<PromptRecord>().CountAsync();
-        if (count > 0) return;
-        await SeedBuiltInPromptsAsync(db);
-    }
-
-    private static async Task SeedBuiltInPromptsAsync(SQLiteAsyncConnection db)
-    {
-        foreach (var (sortOrder, seed) in BuiltInPrompts.BySortOrder)
+        // Reset all built-in prompts to factory text
+        foreach (var seed in BuiltInPrompts.All)
         {
-            await db.InsertAsync(new PromptRecord
+            var existing = await _db!
+                .Table<PromptRecord>()
+                .Where(p => p.IsBuiltIn && p.SortOrder == seed.SortOrder)
+                .FirstOrDefaultAsync();
+
+            if (existing is not null)
             {
-                Title     = seed.Title,
-                Content   = seed.Content,
-                IsBuiltIn = true,
-                SortOrder = sortOrder,
-            });
+                existing.Title      = seed.Title;
+                existing.Content    = seed.Content;
+                existing.IsModified = false;
+                await _db!.UpdateAsync(existing);
+            }
+            else
+            {
+                // Seed missing built-in (e.g. after a corrupt delete)
+                await _db!.InsertAsync(new PromptRecord
+                {
+                    Title     = seed.Title,
+                    Content   = seed.Content,
+                    SortOrder = seed.SortOrder,
+                    IsBuiltIn = true,
+                });
+            }
         }
     }
 
-    // ── Dispose ────────────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_db is not null)
-        {
-            await _db.CloseAsync();
-            _db = null;
-        }
-        _initLock.Dispose();
-    }
+    private Task EnsureInitAsync() =>
+        _initialized ? Task.CompletedTask : InitializeAsync();
 }

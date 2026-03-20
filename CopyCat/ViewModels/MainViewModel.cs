@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CopyCat.Models;
+using CopyCat.Models.Catalog;
 using CopyCat.Services;
+using CopyCat.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -16,7 +18,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IChunkingService       _chunkingService;
     private readonly IClipboardService      _clipboard;
     private readonly IShareService          _shareService;
-    private readonly IDatabaseService       _db;
+    private readonly IRepoRepository        _repoRepo;
+    private readonly IPromptRepository     _promptRepo;
     private readonly ILocalFileService      _localFileService;
     private readonly ILogger<MainViewModel> _logger;
 
@@ -44,16 +47,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public event EventHandler? GoBackRequested;
 
     // ── Language → extension inference map ────────────────────────────────
-    private static readonly IReadOnlyDictionary<string, string[]> LanguageExtensionInference =
-        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["C#"]         = [".csproj", ".xml"],
-            ["TypeScript"] = [".json"],
-            ["JavaScript"] = [".json"],
-            ["Python"]     = [],
-            ["Java"]       = [],
-            ["Kotlin"]     = [],
-        };
+    // Language → companion extension inference moved to FileTypeCatalog.CompanionInference
 
     // ── Observable properties ──────────────────────────────────────────────
 
@@ -438,7 +432,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IChunkingService       chunkingService,
         IClipboardService      clipboard,
         IShareService          shareService,
-        IDatabaseService       db,
+        IRepoRepository        repoRepo,
+        IPromptRepository      promptRepo,
         ILocalFileService      localFileService,
         ILogger<MainViewModel> logger)
     {
@@ -446,7 +441,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _chunkingService  = chunkingService;
         _clipboard        = clipboard;
         _shareService     = shareService;
-        _db               = db;
+        _repoRepo         = repoRepo;
+        _promptRepo       = promptRepo;
         _localFileService = localFileService;
         _logger           = logger;
 
@@ -485,7 +481,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_initialized) return;
         _initialized = true;
 
-        try { await _db.InitializeAsync(); }
+        try { await _repoRepo.InitializeAsync();
+            await _promptRepo.InitializeAsync(); }
         catch (Exception ex) { _logger.LogWarning(ex, "DB init failed."); }
 
         try
@@ -506,11 +503,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             var old = Preferences.Default.Get("recent_urls", string.Empty);
             if (string.IsNullOrWhiteSpace(old)) return;
-            var existing = (await _db.GetSavedReposAsync())
+            var existing = (await _repoRepo.GetSavedReposAsync())
                 .Select(r => r.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var url in old.Split('|').Where(u => !string.IsNullOrWhiteSpace(u)).Reverse())
                 if (!existing.Contains(url))
-                    await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = "main" });
+                    await _repoRepo.UpsertRepoAsync(new SavedRepo { Url = url, Branch = "main" });
             Preferences.Default.Remove("recent_urls");
         }
         catch (Exception ex) { _logger.LogWarning(ex, "URL migration failed."); }
@@ -520,7 +517,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var repos = await _db.GetSavedReposAsync();
+            var repos = await _repoRepo.GetSavedReposAsync();
             SavedRepos.Clear();
             foreach (var r in repos.Take(10)) SavedRepos.Add(r);
         }
@@ -533,7 +530,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             UnsubscribeAllPrompts();
             Prompts.Clear();
-            foreach (var r in await _db.GetPromptsAsync())
+            foreach (var r in await _promptRepo.GetPromptsAsync())
             {
                 var item = PromptItem.FromRecord(r);
                 SubscribePrompt(item);
@@ -564,7 +561,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrEmpty(repo.SavedEnabledExts))
             {
-                var labels = JsonSerializer.Deserialize<List<string>>(repo.SavedEnabledExts) ?? [];
+                var labels = JsonSerializer.Deserialize(repo.SavedEnabledExts, CopyCatJsonContext.Default.ListString) ?? [];
                 if (labels.Count > 0)
                     foreach (var f in FileTypeFilters)
                         f.IsEnabled = labels.Contains(f.Label, StringComparer.OrdinalIgnoreCase);
@@ -572,7 +569,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrEmpty(repo.SavedExcludedFolders))
             {
-                var names = JsonSerializer.Deserialize<List<string>>(repo.SavedExcludedFolders) ?? [];
+                var names = JsonSerializer.Deserialize(repo.SavedExcludedFolders, CopyCatJsonContext.Default.ListString) ?? [];
                 if (names.Count > 0)
                     foreach (var f in FolderFilters)
                         f.IsExcluded = names.Contains(f.Name, StringComparer.OrdinalIgnoreCase);
@@ -580,7 +577,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrEmpty(repo.SavedPatterns))
             {
-                var patterns = JsonSerializer.Deserialize<List<string>>(repo.SavedPatterns) ?? [];
+                var patterns = JsonSerializer.Deserialize(repo.SavedPatterns, CopyCatJsonContext.Default.ListString) ?? [];
                 foreach (var pattern in patterns)
                 {
                     if (!FilePatternFilters.Any(f => f.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
@@ -619,40 +616,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void InitFileTypeFilters()
     {
-        var filters = new[]
-        {
-            new FileTypeFilter { Label = ".cs",      Extensions = [".cs"],               IsEnabled = true  },
-            new FileTypeFilter { Label = ".xaml",    Extensions = [".xaml"],             IsEnabled = true  },
-            new FileTypeFilter { Label = ".json",    Extensions = [".json"],             IsEnabled = true  },
-            new FileTypeFilter { Label = ".csproj",  Extensions = [".csproj"],           IsEnabled = true  },
-            new FileTypeFilter { Label = ".css",     Extensions = [".css"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".scss",    Extensions = [".scss", ".sass"],    IsEnabled = false },
-            new FileTypeFilter { Label = ".html",    Extensions = [".html", ".htm"],     IsEnabled = false },
-            new FileTypeFilter { Label = ".razor",   Extensions = [".razor", ".cshtml"], IsEnabled = false },
-            new FileTypeFilter { Label = ".js",      Extensions = [".js", ".mjs"],       IsEnabled = false },
-            new FileTypeFilter { Label = ".ts",      Extensions = [".ts", ".tsx"],       IsEnabled = false },
-            new FileTypeFilter { Label = ".jsx",     Extensions = [".jsx"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".vue",     Extensions = [".vue"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".py",      Extensions = [".py"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".java",    Extensions = [".java"],             IsEnabled = false },
-            new FileTypeFilter { Label = ".kt",      Extensions = [".kt"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".swift",   Extensions = [".swift"],            IsEnabled = false },
-            new FileTypeFilter { Label = ".c/.h",    Extensions = [".c", ".h"],          IsEnabled = false },
-            new FileTypeFilter { Label = ".cpp",     Extensions = [".cpp", ".hpp"],      IsEnabled = false },
-            new FileTypeFilter { Label = ".go",      Extensions = [".go"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".rs",      Extensions = [".rs"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".rb",      Extensions = [".rb"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".php",     Extensions = [".php"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".xml",     Extensions = [".xml"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".yaml",    Extensions = [".yaml", ".yml"],     IsEnabled = false },
-            new FileTypeFilter { Label = ".md",      Extensions = [".md"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".sql",     Extensions = [".sql"],              IsEnabled = false },
-            new FileTypeFilter { Label = ".proto",   Extensions = [".proto"],            IsEnabled = false },
-            new FileTypeFilter { Label = ".tf",      Extensions = [".tf"],               IsEnabled = false },
-            new FileTypeFilter { Label = ".sh/.ps1", Extensions = [".sh", ".ps1"],       IsEnabled = false },
-        };
-
-        foreach (var f in filters)
+        // Data comes from FileTypeCatalog — adding a new language means
+        // editing the catalog only, not this ViewModel.
+        foreach (var f in FileTypeCatalog.CreateDefaults())
         {
             PropertyChangedEventHandler h = (_, _) =>
             {
@@ -667,13 +633,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void InitFolderFilters()
     {
-        foreach (var name in new[]
+        foreach (var f in FolderCatalog.CreateDefaults())
         {
-            "bin", "obj", ".git", ".vs", "node_modules", "packages",
-            "dist", "build", ".idea", "__pycache__", ".gradle", "out", ".next"
-        })
-        {
-            var f = new FolderFilter { Name = name, IsExcluded = true };
             f.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FolderFilterSummary));
             FolderFilters.Add(f);
         }
@@ -681,17 +642,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void InitFilePatternFilters()
     {
-        var defaults = new[]
-        {
-            new FilePatternFilter { Pattern = "*.min.*",       IsEnabled = true  },
-            new FilePatternFilter { Pattern = "*.generated.*", IsEnabled = true  },
-            new FilePatternFilter { Pattern = "*.Designer.*",  IsEnabled = true  },
-            new FilePatternFilter { Pattern = "*Test*",        IsEnabled = false },
-            new FilePatternFilter { Pattern = "*Spec*",        IsEnabled = false },
-            new FilePatternFilter { Pattern = "*_test.*",      IsEnabled = false },
-            new FilePatternFilter { Pattern = "*Mock*",        IsEnabled = false },
-        };
-        foreach (var p in defaults)
+        foreach (var p in PatternCatalog.CreateDefaults())
         {
             p.PropertyChanged += (_, _) => OnPropertyChanged(nameof(FilePatternSummary));
             FilePatternFilters.Add(p);
@@ -809,10 +760,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var repos    = await _db.GetSavedReposAsync();
+            var repos    = await _repoRepo.GetSavedReposAsync();
             var existing = repos.FirstOrDefault(r => r.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
-            if (existing is not null) { existing.Branch = branch; await _db.UpsertRepoAsync(existing); }
-            else await _db.UpsertRepoAsync(new SavedRepo { Url = url, Branch = branch });
+            if (existing is not null) { existing.Branch = branch; await _repoRepo.UpsertRepoAsync(existing); }
+            else await _repoRepo.UpsertRepoAsync(new SavedRepo { Url = url, Branch = branch });
             await RefreshSavedReposAsync();
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not save repo."); }
@@ -1044,7 +995,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var inferredLabels = new List<string>();
             foreach (var (detectedExt, _) in detected)
             {
-                foreach (var (_, companionExts) in LanguageExtensionInference)
+                foreach (var (_, companionExts) in FileTypeCatalog.CompanionInference)
                 {
                     foreach (var companionExt in companionExts)
                     {
@@ -1348,7 +1299,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         prompt.Title = title; prompt.Content = prompt.EditContent.Trim(); prompt.IsEditing = false;
         try
         {
-            var r = await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt)));
+            var r = await _promptRepo.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt)));
             prompt.Id = r.Id;
             OnPropertyChanged(nameof(SelectedPrompt));
             OnPropertyChanged(nameof(SelectedPromptLabel));
@@ -1368,7 +1319,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task DeletePromptAsync(PromptItem prompt)
     {
         if (prompt is null || prompt.IsBuiltIn) return;
-        try { await _db.DeletePromptAsync(prompt.Id); UnsubscribePrompt(prompt); Prompts.Remove(prompt); }
+        try { await _promptRepo.DeletePromptAsync(prompt.Id); UnsubscribePrompt(prompt); Prompts.Remove(prompt); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not delete prompt."); }
     }
 
@@ -1383,7 +1334,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ResetPromptsAsync()
     {
-        try { await _db.ResetPromptsToDefaultAsync(); await RefreshPromptsAsync(); }
+        try { await _promptRepo.ResetPromptsToDefaultAsync(); await RefreshPromptsAsync(); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not reset prompts."); }
     }
 
@@ -1394,7 +1345,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (!BuiltInPrompts.BySortOrder.TryGetValue(prompt.OriginalSortOrder, out var seed))
         { StatusText = "⚠️ Could not find factory default for this prompt."; return; }
         prompt.Title = seed.Title; prompt.Content = seed.Content; prompt.IsEditing = false;
-        try { await _db.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); }
+        try { await _promptRepo.UpsertPromptAsync(prompt.ToRecord(Prompts.IndexOf(prompt))); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not reset single prompt."); }
     }
 
@@ -1417,7 +1368,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (repo is null) return;
         try
         {
-            await _db.DeleteRepoAsync(repo.Id);
+            await _repoRepo.DeleteRepoAsync(repo.Id);
             try { SecureStorage.Default.Remove($"repo_token_{repo.Id}"); } catch { }
             if (SelectedSavedRepo?.Id == repo.Id) SelectedSavedRepo = null;
             await RefreshSavedReposAsync();
@@ -1435,7 +1386,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public async Task SetRepoNameAsync(SavedRepo repo, string name)
     {
-        repo.Name = name; await _db.UpsertRepoAsync(repo); await RefreshSavedReposAsync();
+        repo.Name = name; await _repoRepo.UpsertRepoAsync(repo); await RefreshSavedReposAsync();
     }
 
     // ── Save workspace ─────────────────────────────────────────────────────
@@ -1449,14 +1400,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var repo = SelectedSavedRepo;
             repo.SavedMaxTokens       = (int)MaxTokensPerChunk;
             repo.SavedEnabledExts     = JsonSerializer.Serialize(
-                FileTypeFilters.Where(f => f.IsEnabled).Select(f => f.Label).ToList());
+                FileTypeFilters.Where(f => f.IsEnabled).Select(f => f.Label).ToList(), CopyCatJsonContext.Default.ListString);
             repo.SavedExcludedFolders = JsonSerializer.Serialize(
-                FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name).ToList());
+                FolderFilters.Where(f => f.IsExcluded).Select(f => f.Name).ToList(), CopyCatJsonContext.Default.ListString);
             repo.SavedPatterns        = JsonSerializer.Serialize(
-                FilePatternFilters.Where(f => f.IsEnabled && !f.IsAutoAdded).Select(f => f.Pattern).ToList());
+                FilePatternFilters.Where(f => f.IsEnabled && !f.IsAutoAdded).Select(f => f.Pattern).ToList(), CopyCatJsonContext.Default.ListString);
             repo.SavedPromptSortOrder = SelectedPrompt?.OriginalSortOrder ?? -1;
 
-            await _db.UpdateRepoWorkspaceAsync(repo);
+            await _repoRepo.UpdateRepoWorkspaceAsync(repo);
             OnPropertyChanged(nameof(HasWorkspaceSaved));
 
             AutoDetectStatusText = "✓ Workspace saved";

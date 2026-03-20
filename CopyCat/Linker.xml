@@ -1,0 +1,82 @@
+<!--
+  Linker.xml — TrimmerRootDescriptor for CopyCat
+  ================================================
+  The .NET trimmer runs in "full" mode on every Android Release build.
+  Types instantiated ONLY from XAML (converters, behaviors, DataTemplate-
+  bound model properties) have no C# call site, so the trimmer removes
+  them silently and the app crashes at runtime.
+
+  This file pins every such type so the trimmer always keeps them.
+
+  PHASE HISTORY
+  ─────────────
+  Phase 1: Initial file — covered Converters, Behaviors, Models, ViewModels,
+           Services, sqlite-net-pcl, CommunityToolkit.Mvvm, MAUI internals.
+  Phase 3: Added Models.Catalog (BuiltInPrompts, FileTypeCatalog etc.) and
+           Services.Interfaces (IRepoRepository, IPromptRepository).
+-->
+<linker>
+
+  <!-- ── CopyCat assembly ──────────────────────────────────────────────── -->
+  <assembly fullname="CopyCat">
+
+    <!--
+      Converters — ALL resolved only via StaticResource in XAML.
+      The trimmer has no C# call site to anchor them.
+    -->
+    <namespace name="CopyCat.Converters" />
+
+    <!-- Behaviors — TactileCopyBehavior is bound via xmlns:behaviors in XAML -->
+    <namespace name="CopyCat.Behaviors" />
+
+    <!--
+      Models — sqlite-net-pcl reads [Table]/[Column]/[PrimaryKey] via reflection.
+      ALL properties on every model must survive trimming.
+    -->
+    <namespace name="CopyCat.Models" />
+
+    <!--
+      Models.Catalog — static classes referenced by FilterViewModel and
+      DatabaseService.  Although they have C# call sites, preserve explicitly
+      to guard against future refactors moving call sites to generated code.
+    -->
+    <namespace name="CopyCat.Models.Catalog" />
+
+    <!-- ViewModels — compiled bindings survive, but RelativeSource paths may not -->
+    <namespace name="CopyCat.ViewModels" />
+
+    <!--
+      Services — DI roots the concrete types, but the interfaces must also
+      survive for the DI container's internal reflection at startup.
+    -->
+    <namespace name="CopyCat.Services" />
+    <namespace name="CopyCat.Services.Interfaces" />
+
+  </assembly>
+
+  <!-- ── sqlite-net-pcl ────────────────────────────────────────────────── -->
+  <!--
+    SQLite uses Type.GetProperties() at runtime to discover columns.
+    Without this, all column mappings silently disappear.
+  -->
+  <assembly fullname="SQLite-net">
+    <type fullname="SQLite.SQLiteConnection"       preserve="all" />
+    <type fullname="SQLite.SQLiteAsyncConnection"  preserve="all" />
+    <type fullname="SQLite.TableMapping"           preserve="all" />
+    <type fullname="SQLite.TableMapping+Column"    preserve="all" />
+  </assembly>
+
+  <!-- ── CommunityToolkit.Mvvm ─────────────────────────────────────────── -->
+  <assembly fullname="CommunityToolkit.Mvvm">
+    <namespace name="CommunityToolkit.Mvvm.ComponentModel" />
+    <namespace name="CommunityToolkit.Mvvm.Input"          />
+    <namespace name="CommunityToolkit.Mvvm.Messaging"      />
+  </assembly>
+
+  <!-- ── Microsoft.Maui.Controls ──────────────────────────────────────── -->
+  <assembly fullname="Microsoft.Maui.Controls">
+    <type fullname="Microsoft.Maui.Controls.IValueConverter" preserve="all" />
+    <type fullname="Microsoft.Maui.Controls.BindableLayout"  preserve="all" />
+  </assembly>
+
+</linker>

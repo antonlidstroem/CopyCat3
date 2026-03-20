@@ -1,53 +1,51 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Maui.Graphics;
 
 namespace CopyCat.Models;
 
 /// <summary>
-/// Represents a single file returned by the last fetch operation.
-/// Drives the "browse fetched files" panel inside FILE PATTERNS so the
-/// developer can exclude specific files without writing glob patterns.
+/// Represents a single file shown in the Fetched Files browser
+/// (the collapsible list inside the file-patterns card).
 ///
-/// Populated by MainViewModel.FetchAsync after the file list is obtained.
-/// Cleared on Reset. Not persisted — session-only.
+/// Each entry lets the user include or exclude a specific file
+/// individually, independent of the pattern filters.  Tapping
+/// the exclude icon creates a matching <see cref="FilePatternFilter"/>
+/// with <c>IsAutoAdded = true</c>.
 /// </summary>
 public partial class FetchedFileEntry : ObservableObject
 {
-    /// <summary>Relative path as it appears in the repository (e.g. "src/App/MainPage.cs").</summary>
+    // ── Data ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Normalised forward-slash path relative to the repo root.</summary>
     public string Path { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Just the file name portion, used as the display label in the browser row
-    /// and as the exact-match pattern added to FilePatternFilters on exclusion.
-    /// </summary>
+    /// <summary>File name portion of <see cref="Path"/> (no directory).</summary>
     public string FileName { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Parent folder path used for group headers in the CollectionView
-    /// (e.g. "src/App" or "Root" for files at the repository root).
-    /// </summary>
+    /// <summary>Directory portion of <see cref="Path"/>.</summary>
     public string Folder { get; set; } = string.Empty;
 
-    /// <summary>
-    /// When true this file has been explicitly excluded by the user in the
-    /// file browser. The ViewModel adds an exact-filename FilePatternFilter
-    /// when this becomes true and removes it when it becomes false.
-    /// </summary>
+    /// <summary>Whether this file is excluded from chunking.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ExcludeIcon))]
     [NotifyPropertyChangedFor(nameof(ExcludeIconColor))]
     [NotifyPropertyChangedFor(nameof(RowBackground))]
     private bool _isExcluded;
 
-    // ── Derived display helpers ────────────────────────────────────────────
+    // ── Computed display helpers ──────────────────────────────────────────────
 
-    /// <summary>○ when included, ✕ when excluded.</summary>
+    /// <summary>Icon character shown in the toggle column.</summary>
     public string ExcludeIcon => IsExcluded ? "✕" : "○";
 
-    /// <summary>Red when excluded, dim border-color when included.</summary>
+    /// <summary>Colour of the toggle icon.</summary>
     public Color ExcludeIconColor =>
-        IsExcluded ? Color.FromArgb("#EF4444") : Color.FromArgb("#1A3D4A");
+        IsExcluded
+            ? Color.FromArgb("#EF4444")   // TextError
+            : Color.FromArgb("#6B7280");  // TextMuted
 
-    /// <summary>Red tint row background when excluded, transparent otherwise.</summary>
+    /// <summary>Row background tint when the file is excluded.</summary>
     public Color RowBackground =>
-        IsExcluded ? Color.FromArgb("#2A0D0D") : Colors.Transparent;
+        IsExcluded
+            ? Color.FromArgb("#2A1515")   // subtle red tint
+            : Colors.Transparent;
 }
