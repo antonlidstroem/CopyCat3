@@ -26,7 +26,7 @@
     <!-- copycat_logo.svg is kept for potential future use in non-button contexts -->
     <MauiImage Include="Resources\Images\copycat_logo.svg" />
     <MauiFont Include="Resources\Fonts\*" />
-    <MauiXaml Update="Resources\Styles\Styles.xaml">
+    <!--<MauiXaml Update="Resources\Styles\Styles.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
     <MauiXaml Update="MainPage.xaml">
@@ -35,10 +35,10 @@
     <MauiXaml Update="App.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <!-- PromptsPage: instantiated on-demand in MainPage.xaml.cs -->
+    --><!-- PromptsPage: instantiated on-demand in MainPage.xaml.cs --><!--
     <MauiXaml Update="Views\PromptsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
+    </MauiXaml>-->
   </ItemGroup>
 
   <ItemGroup>

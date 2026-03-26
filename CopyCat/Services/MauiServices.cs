@@ -1,3 +1,5 @@
+using CopyCat.Services;
+
 namespace CopyCat.Services;
 
 public class MauiClipboardService : IClipboardService
@@ -27,7 +29,7 @@ public class MauiClipboardService : IClipboardService
 
         await Share.Default.RequestAsync(new ShareTextRequest
         {
-            Text  = payload,
+            Text = payload,
             Title = title,
         });
     }
@@ -38,7 +40,7 @@ public class MauiShareService : IShareService
     public Task ShareTextAsync(string text, string title) =>
         Share.Default.RequestAsync(new ShareTextRequest
         {
-            Text  = text,
+            Text = text,
             Title = title
         });
 }
