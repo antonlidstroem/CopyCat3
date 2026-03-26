@@ -1,66 +1,54 @@
 using CopyCat.Models;
-using CopyCat.Models.Catalog;          // ← BuiltInPrompts.All lives here
-using CopyCat.Services.Interfaces;
 using SQLite;
 
 namespace CopyCat.Services;
 
 /// <summary>
-/// SQLite-backed implementation of both <see cref="IRepoRepository"/>
-/// and <see cref="IPromptRepository"/>.
+/// SQLite-net implementation of <see cref="IDatabaseService"/>.
 ///
-/// SINGLE CLASS, TWO INTERFACES
-/// ─────────────────────────────
-/// Both repository interfaces share one database file and one
-/// <see cref="SQLiteAsyncConnection"/>.  A single concrete class
-/// avoids the overhead of two separate connections while still
-/// letting consumers depend on only the interface they need.
-///
-/// INIT GUARD
-/// ──────────
-/// <see cref="InitializeAsync"/> is guarded by a flag so it is safe
-/// to call from both <c>RepositoryViewModel</c> and <c>PromptsViewModel</c>
-/// independently — only the first call creates the schema.
-///
-/// LINKER SAFETY
-/// ─────────────
-/// All model types (SavedRepo, PromptRecord) are preserved by Linker.xml
-/// via <c>&lt;namespace name="CopyCat.Models" /&gt;</c>.  Without this,
-/// SQLite-net's reflection-based column mapping silently returns empty
-/// objects in Android Release builds.
+/// Migration history:
+///   V1 — Initial: SavedRepos, Prompts
+///   V2 — C6: Added 5 workspace columns to SavedRepos via ALTER TABLE
+///   V3 — Phase 4: Added XmlTagButtons table
 /// </summary>
-public class DatabaseService : IRepoRepository, IPromptRepository
+public class DatabaseService : IDatabaseService, IAsyncDisposable
 {
     private SQLiteAsyncConnection? _db;
-    private bool _initialized;
+    private readonly string        _dbPath;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    // ── Initialisation ────────────────────────────────────────────────────────
+    public DatabaseService()
+    {
+        _dbPath = Path.Combine(FileSystem.AppDataDirectory, "copycat.db");
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────
 
     public async Task InitializeAsync()
     {
-        if (_initialized) return;
+        if (_db is not null) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_initialized) return; // double-checked inside the lock
+            if (_db is not null) return;
 
-            var dbPath = Path.Combine(
-                FileSystem.AppDataDirectory,
-                "copycat.db3");
+            SQLitePCL.Batteries_V2.Init();
 
-            _db = new SQLiteAsyncConnection(dbPath,
-                SQLiteOpenFlags.ReadWrite |
-                SQLiteOpenFlags.Create   |
-                SQLiteOpenFlags.SharedCache);
+            var connection = new SQLiteAsyncConnection(
+                _dbPath,
+                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache);
 
-            await _db.CreateTableAsync<SavedRepo>();
-            await _db.CreateTableAsync<PromptRecord>();
+            await connection.CreateTableAsync<SavedRepo>();
+            await connection.CreateTableAsync<PromptRecord>();
+            await connection.CreateTableAsync<XmlTagButton>();
 
-            await SeedPromptsIfEmptyAsync();
+            _db = connection;
 
-            _initialized = true;
+            // Run all migrations before seeding
+            await MigrateWorkspaceColumnsAsync();
+            await SeedBuiltInPromptsIfEmptyAsync();
+            await SeedBuiltInXmlTagsIfEmptyAsync();
         }
         finally
         {
@@ -68,124 +56,196 @@ public class DatabaseService : IRepoRepository, IPromptRepository
         }
     }
 
-    private async Task SeedPromptsIfEmptyAsync()
+    /// <summary>
+    /// V2 migration: adds the five C6 workspace columns to SavedRepos.
+    /// Each ALTER TABLE is idempotent — duplicate column errors are swallowed.
+    /// </summary>
+    private async Task MigrateWorkspaceColumnsAsync()
     {
-        var count = await _db!.Table<PromptRecord>().CountAsync();
-        if (count > 0) return;
+        if (_db is null) return;
 
-        // BuiltInPrompts resolves to CopyCat.Models.Catalog.BuiltInPrompts (8 prompts)
-        foreach (var seed in BuiltInPrompts.All)
+        var migrations = new[]
         {
-            await _db.InsertAsync(new PromptRecord
-            {
-                Title     = seed.Title,
-                Content   = seed.Content,
-                SortOrder = seed.SortOrder,
-                IsBuiltIn = true,
-            });
+            "ALTER TABLE SavedRepos ADD COLUMN SavedMaxTokens INTEGER DEFAULT 0",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedEnabledExts TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedExcludedFolders TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedPatterns TEXT DEFAULT ''",
+            "ALTER TABLE SavedRepos ADD COLUMN SavedPromptSortOrder INTEGER DEFAULT -1",
+        };
+
+        foreach (var sql in migrations)
+        {
+            try { await _db.ExecuteAsync(sql); }
+            catch { /* Column already exists — safe to ignore */ }
         }
     }
 
-    // ── IRepoRepository ───────────────────────────────────────────────────────
+    private async Task<SQLiteAsyncConnection> Db()
+    {
+        if (_db is null) await InitializeAsync();
+        return _db ?? throw new InvalidOperationException(
+            "Database could not be initialised. Check storage permissions and available space.");
+    }
+
+    // ── Saved repos ────────────────────────────────────────────────────────
 
     public async Task<List<SavedRepo>> GetSavedReposAsync()
     {
-        await EnsureInitAsync();
-        return await _db!
-            .Table<SavedRepo>()
-            .OrderByDescending(r => r.Id)
+        var db = await Db();
+        return await db.Table<SavedRepo>()
+            .OrderByDescending(r => r.LastUsed)
             .ToListAsync();
     }
 
     public async Task<SavedRepo> UpsertRepoAsync(SavedRepo repo)
     {
-        await EnsureInitAsync();
-        if (repo.Id == 0)
-            await _db!.InsertAsync(repo);
-        else
-            await _db!.UpdateAsync(repo);
+        var db = await Db();
+        repo.LastUsed = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (repo.Id == 0) await db.InsertAsync(repo);
+        else              await db.UpdateAsync(repo);
         return repo;
     }
 
     public async Task DeleteRepoAsync(int id)
     {
-        await EnsureInitAsync();
-        await _db!.DeleteAsync<SavedRepo>(id);
+        var db = await Db();
+        await db.DeleteAsync<SavedRepo>(id);
+    }
+
+    public async Task ClearAllReposAsync()
+    {
+        var db = await Db();
+        await db.DeleteAllAsync<SavedRepo>();
     }
 
     public async Task UpdateRepoWorkspaceAsync(SavedRepo repo)
     {
-        await EnsureInitAsync();
-        await _db!.UpdateAsync(repo);
+        var db = await Db();
+        await db.ExecuteAsync(
+            @"UPDATE SavedRepos
+              SET SavedMaxTokens        = ?,
+                  SavedEnabledExts      = ?,
+                  SavedExcludedFolders  = ?,
+                  SavedPatterns         = ?,
+                  SavedPromptSortOrder  = ?
+              WHERE Id = ?",
+            repo.SavedMaxTokens,
+            repo.SavedEnabledExts,
+            repo.SavedExcludedFolders,
+            repo.SavedPatterns,
+            repo.SavedPromptSortOrder,
+            repo.Id);
     }
 
-    // ── IPromptRepository ─────────────────────────────────────────────────────
+    // ── Prompts ────────────────────────────────────────────────────────────
 
     public async Task<List<PromptRecord>> GetPromptsAsync()
     {
-        await EnsureInitAsync();
-        return await _db!
-            .Table<PromptRecord>()
+        var db = await Db();
+        return await db.Table<PromptRecord>()
             .OrderBy(p => p.SortOrder)
             .ToListAsync();
     }
 
-    public async Task<PromptRecord> UpsertPromptAsync(PromptRecord record)
+    public async Task<PromptRecord> UpsertPromptAsync(PromptRecord prompt)
     {
-        await EnsureInitAsync();
-        if (record.Id == 0)
-            await _db!.InsertAsync(record);
-        else
-            await _db!.UpdateAsync(record);
-        return record;
+        var db = await Db();
+        if (prompt.Id == 0) await db.InsertAsync(prompt);
+        else                await db.UpdateAsync(prompt);
+        return prompt;
     }
 
     public async Task DeletePromptAsync(int id)
     {
-        await EnsureInitAsync();
-        await _db!.DeleteAsync<PromptRecord>(id);
+        var db = await Db();
+        await db.DeleteAsync<PromptRecord>(id);
     }
 
     public async Task ResetPromptsToDefaultAsync()
     {
-        await EnsureInitAsync();
+        var db = await Db();
+        await db.DeleteAllAsync<PromptRecord>();
+        await SeedBuiltInPromptsAsync(db);
+    }
 
-        // Delete all custom prompts
-        await _db!.Table<PromptRecord>()
-            .Where(p => !p.IsBuiltIn)
-            .DeleteAsync();
+    // ── XML tag buttons ────────────────────────────────────────────────────
 
-        // Reset all built-in prompts to factory text
-        foreach (var seed in BuiltInPrompts.All)
+    public async Task<List<XmlTagButton>> GetXmlTagButtonsAsync()
+    {
+        var db = await Db();
+        return await db.Table<XmlTagButton>()
+            .OrderBy(t => t.SortOrder)
+            .ToListAsync();
+    }
+
+    public async Task<XmlTagButton> UpsertXmlTagButtonAsync(XmlTagButton tag)
+    {
+        var db = await Db();
+        if (tag.Id == 0) await db.InsertAsync(tag);
+        else             await db.UpdateAsync(tag);
+        return tag;
+    }
+
+    public async Task DeleteXmlTagButtonAsync(int id)
+    {
+        var db = await Db();
+        await db.DeleteAsync<XmlTagButton>(id);
+    }
+
+    // ── Seeding ────────────────────────────────────────────────────────────
+
+    private async Task SeedBuiltInPromptsIfEmptyAsync()
+    {
+        var db    = await Db();
+        var count = await db.Table<PromptRecord>().CountAsync();
+        if (count > 0) return;
+        await SeedBuiltInPromptsAsync(db);
+    }
+
+    private static async Task SeedBuiltInPromptsAsync(SQLiteAsyncConnection db)
+    {
+        foreach (var (sortOrder, seed) in BuiltInPrompts.BySortOrder)
         {
-            var existing = await _db!
-                .Table<PromptRecord>()
-                .Where(p => p.IsBuiltIn && p.SortOrder == seed.SortOrder)
-                .FirstOrDefaultAsync();
-
-            if (existing is not null)
+            await db.InsertAsync(new PromptRecord
             {
-                existing.Title      = seed.Title;
-                existing.Content    = seed.Content;
-                existing.IsModified = false;
-                await _db!.UpdateAsync(existing);
-            }
-            else
-            {
-                // Seed missing built-in (e.g. after a corrupt delete)
-                await _db!.InsertAsync(new PromptRecord
-                {
-                    Title     = seed.Title,
-                    Content   = seed.Content,
-                    SortOrder = seed.SortOrder,
-                    IsBuiltIn = true,
-                });
-            }
+                Title     = seed.Title,
+                Content   = seed.Content,
+                IsBuiltIn = true,
+                SortOrder = sortOrder,
+            });
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    private async Task SeedBuiltInXmlTagsIfEmptyAsync()
+    {
+        var db    = await Db();
+        var count = await db.Table<XmlTagButton>().CountAsync();
+        if (count > 0) return;
 
-    private Task EnsureInitAsync() =>
-        _initialized ? Task.CompletedTask : InitializeAsync();
+        for (int i = 0; i < BuiltInXmlTags.Seeds.Count; i++)
+        {
+            var seed = BuiltInXmlTags.Seeds[i];
+            await db.InsertAsync(new XmlTagButton
+            {
+                Label       = seed.Label,
+                XmlOpen     = seed.XmlOpen,
+                XmlClose    = seed.XmlClose,
+                Placeholder = seed.Placeholder,
+                IsBuiltIn   = true,
+                SortOrder   = i,
+            });
+        }
+    }
+
+    // ── Dispose ────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_db is not null)
+        {
+            await _db.CloseAsync();
+            _db = null;
+        }
+        _initLock.Dispose();
+    }
 }

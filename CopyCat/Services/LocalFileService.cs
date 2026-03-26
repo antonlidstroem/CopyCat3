@@ -12,7 +12,6 @@ public class LocalFileService : ILocalFileService
     {
         var trimmed = localPath.Trim().Trim('"');
 
-        // If a solution or project file was provided, use its directory
         string baseDir;
         if (trimmed.EndsWith(".sln",    StringComparison.OrdinalIgnoreCase) ||
             trimmed.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
@@ -30,29 +29,15 @@ public class LocalFileService : ILocalFileService
                 $"Directory not found: {baseDir}\n" +
                 "Make sure the path exists and is accessible.");
 
-        var extSet = extensions
-            .Select(e => e.ToLowerInvariant())
-            .ToHashSet();
-
-        var excludedFolderSet = excludedFolders
-            .Select(f => f.ToLowerInvariant().Trim('/'))
-            .ToHashSet();
-
-        var patternList = excludedFilePatterns
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .ToList();
+        var extSet = extensions.Select(e => e.ToLowerInvariant()).ToHashSet();
+        var excludedFolderSet = excludedFolders.Select(f => f.ToLowerInvariant().Trim('/')).ToHashSet();
+        var patternList = excludedFilePatterns.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
 
         progress?.Report($"Scanning {baseDir}…");
 
-        // BUG FIX #13: Directory.EnumerateFiles with AllDirectories throws
-        // UnauthorizedAccessException if any subdirectory is inaccessible
-        // (very common on macOS/iOS sandboxes and Windows protected folders),
-        // failing the entire scan.  We now walk the tree manually so that
-        // locked directories are skipped rather than crashing the operation.
         var allFiles = EnumerateFilesSafe(baseDir, excludedFolderSet, cancellationToken);
-
-        var results = new List<(string Path, string Content)>();
-        int scanned = 0;
+        var results  = new List<(string Path, string Content)>();
+        int scanned  = 0;
 
         await foreach (var fullPath in allFiles)
         {
@@ -60,8 +45,7 @@ public class LocalFileService : ILocalFileService
 
             var relativePath = System.IO.Path.GetRelativePath(baseDir, fullPath)
                                              .Replace('\\', '/');
-
-            var ext = System.IO.Path.GetExtension(fullPath).ToLowerInvariant();
+            var ext      = System.IO.Path.GetExtension(fullPath).ToLowerInvariant();
             if (!extSet.Contains(ext)) continue;
 
             var fileName = System.IO.Path.GetFileName(fullPath);
@@ -94,11 +78,12 @@ public class LocalFileService : ILocalFileService
     /// <summary>
     /// Recursively enumerates files, silently skipping any directories that
     /// raise UnauthorizedAccessException or other IO errors.
+    /// Safe on Android/iOS sandboxes and Windows protected folders.
     /// </summary>
     private static async IAsyncEnumerable<string> EnumerateFilesSafe(
-        string              root,
-        HashSet<string>     excludedFolderSet,
-        CancellationToken   cancellationToken)
+        string          root,
+        HashSet<string> excludedFolderSet,
+        CancellationToken cancellationToken)
     {
         var queue = new Queue<string>();
         queue.Enqueue(root);
@@ -106,18 +91,14 @@ public class LocalFileService : ILocalFileService
         while (queue.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var current = queue.Dequeue();
 
-            // Yield files in this directory
             IEnumerable<string> files;
             try   { files = Directory.EnumerateFiles(current); }
-            catch { continue; }   // skip inaccessible directory
+            catch { continue; }
 
-            foreach (var file in files)
-                yield return file;
+            foreach (var file in files) yield return file;
 
-            // Queue subdirectories, respecting the excluded-folder list
             IEnumerable<string> subdirs;
             try   { subdirs = Directory.EnumerateDirectories(current); }
             catch { continue; }
@@ -125,22 +106,17 @@ public class LocalFileService : ILocalFileService
             foreach (var sub in subdirs)
             {
                 var name = System.IO.Path.GetFileName(sub).ToLowerInvariant();
-                if (!excludedFolderSet.Contains(name))
-                    queue.Enqueue(sub);
+                if (!excludedFolderSet.Contains(name)) queue.Enqueue(sub);
             }
 
-            // Yield control periodically to keep the UI responsive
             await Task.Yield();
         }
     }
 
-    // ── Pattern helpers ────────────────────────────────────────────────────
-
     private static bool MatchesAnyPattern(string fileName, List<string> patterns)
     {
         foreach (var p in patterns)
-            if (MatchesGlob(fileName, p))
-                return true;
+            if (MatchesGlob(fileName, p)) return true;
         return false;
     }
 
@@ -149,9 +125,7 @@ public class LocalFileService : ILocalFileService
         var t     = text.ToLowerInvariant();
         var p     = pattern.ToLowerInvariant();
         var parts = p.Split('*');
-
         if (parts.Length == 1) return t.Equals(p, StringComparison.Ordinal);
-
         int pos = 0;
         for (int i = 0; i < parts.Length; i++)
         {
@@ -161,8 +135,7 @@ public class LocalFileService : ILocalFileService
             if (i == 0 && !p.StartsWith('*') && found != 0) return false;
             pos = found + parts[i].Length;
         }
-        if (!p.EndsWith('*') && parts[^1].Length > 0 && !t.EndsWith(parts[^1]))
-            return false;
+        if (!p.EndsWith('*') && parts[^1].Length > 0 && !t.EndsWith(parts[^1])) return false;
         return true;
     }
 }

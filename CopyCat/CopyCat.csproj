@@ -20,63 +20,44 @@
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-    <TrimmerRootDescriptor>$(MSBuildProjectDirectory)\Linker.xml</TrimmerRootDescriptor>
-    <MetadataUpdaterSupport Condition="'$(Configuration)' == 'Release'">false</MetadataUpdaterSupport>
-    <EnableProguard>false</EnableProguard>
-  </PropertyGroup>
-
   <ItemGroup>
     <MauiIcon Include="Resources\Images\appicon.svg" Color="#111118" />
     <MauiSplashScreen Include="Resources\Images\appicon.svg" Color="#111118" BaseSize="128,128" />
+    <!-- copycat_logo.svg is kept for potential future use in non-button contexts -->
     <MauiImage Include="Resources\Images\copycat_logo.svg" />
     <MauiFont Include="Resources\Fonts\*" />
-    <MauiXaml Update="Resources\Styles\Converters.xaml">  <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Resources\Styles\Styles.xaml">      <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="App.xaml">                           <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FilePatternsCard.xaml">
+    <MauiXaml Update="Resources\Styles\Styles.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FileTypesCard.xaml">
+    <MauiXaml Update="MainPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <MauiXaml Update="Views\Configuration\FoldersCard.xaml">
+    <MauiXaml Update="App.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
-    <MauiXaml Update="Views\Configuration\PromptsQuickCard.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
-    <MauiXaml Update="Views\Configuration\RepositoryCard.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
-    <MauiXaml Update="Views\Configuration\TokenSliderCard.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
-    <MauiXaml Update="Views\MainPage.xaml">                <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\PromptsPage.xaml">             <Generator>MSBuild:Compile</Generator> </MauiXaml>
-    <MauiXaml Update="Views\Results\ActionBar.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
-    <MauiXaml Update="Views\Results\ChunkListView.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </MauiXaml>
-    <MauiXaml Update="Views\Results\StatsBar.xaml">
+    <!-- PromptsPage: instantiated on-demand in MainPage.xaml.cs -->
+    <MauiXaml Update="Views\PromptsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
-    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
-    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.8" />
+    <PackageReference Include="CommunityToolkit.Mvvm"                   Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Http"               Version="9.0.0" />
+    <PackageReference Include="Microsoft.Maui.Controls"                 Version="9.0.0" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility"   Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug"      Version="9.0.0" />
+    <PackageReference Include="sqlite-net-pcl"                          Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green"               Version="2.1.8" />
   </ItemGroup>
 
+  <!--
+    LibGit2Sharp: provides native libgit2 bindings for desktop targets.
+    Only available on Windows and macOS — iOS/Android do not have the native binary.
+    FileTypeDetectorService uses #if !ANDROID && !IOS guards accordingly.
+  -->
   <ItemGroup Condition="'$(TargetFramework)'=='net9.0-windows10.0.19041.0' or '$(TargetFramework)'=='net9.0-maccatalyst'">
-    <PackageReference Include="LibGit2Sharp" Version="0.30.*" />
+    <PackageReference Include="LibGit2Sharp" Version="0.30.*"/>
   </ItemGroup>
 
 </Project>

@@ -3,14 +3,6 @@ using System.Text;
 
 namespace CopyCat.Services;
 
-/// <summary>
-/// Packs source files into token-bounded <see cref="CodeChunk"/> objects.
-///
-/// Phase 1 bug fixes:
-///   B1 – Header token cost is now deducted from the effective budget before
-///        line-level splitting, so split chunks never exceed maxTokensPerChunk.
-///   B2 – FileSeparator accounting verified correct; explanatory comment added.
-/// </summary>
 public class ChunkingService : IChunkingService
 {
     private const double CharsPerToken = 4.0;
@@ -21,10 +13,6 @@ public class ChunkingService : IChunkingService
     private static int EstimateTokensStatic(string text) =>
         (int)Math.Ceiling(text.Length / CharsPerToken);
 
-    /// <summary>
-    /// Returns the token cost of the ==== path ==== header line including its
-    /// trailing newline. Pre-deducted from the budget in SplitLargeSection.
-    /// </summary>
     private static int HeaderTokens(string path) =>
         EstimateTokensStatic($"==== {path} ====\n");
 
@@ -128,9 +116,6 @@ public class ChunkingService : IChunkingService
                 continue;
             }
 
-            // B2: sepTokens is 0 when buffer is empty (no preceding content to
-            // separate from), and resets to 0 after each flush because the new
-            // buffer starts empty. Logic is correct as-is.
             int sepTokens = buffer.Length > 0 ? EstimateTokensStatic(FileSeparator) : 0;
 
             if (bufferTokens + sepTokens + sectionTokens > maxTokensPerChunk && buffer.Length > 0)
@@ -153,14 +138,6 @@ public class ChunkingService : IChunkingService
         return result;
     }
 
-    /// <summary>
-    /// Splits a single large section at the line level.
-    ///
-    /// B1 FIX: the effective budget is maxTokensPerChunk minus the header
-    /// token cost. The ==== header is the first line of <paramref name="section"/>
-    /// and counts against the budget. Without this deduction, the header itself
-    /// can push the first accumulated chunk fractionally over the limit.
-    /// </summary>
     private List<CodeChunk> SplitLargeSection(
         string projectName,
         (string Path, string Content) file,
@@ -174,7 +151,6 @@ public class ChunkingService : IChunkingService
         var buffer = new StringBuilder();
         int tokens = 0;
 
-        // Deduct header cost so line accumulation never exceeds the limit.
         int effectiveBudget = Math.Max(1, maxTokensPerChunk - HeaderTokens(file.Path));
 
         foreach (var line in lines)

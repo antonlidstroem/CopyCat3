@@ -1,5 +1,4 @@
 using CopyCat.Services;
-using CopyCat.Services.Interfaces;
 using CopyCat.ViewModels;
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +18,6 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // ── HTTP client ───────────────────────────────────────────────────────
         builder.Services.AddHttpClient("github", client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5);
@@ -28,38 +26,29 @@ public static class MauiProgram
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
             AllowAutoRedirect        = true,
-            MaxAutomaticRedirections = 5,
+            MaxAutomaticRedirections = 5
         });
 
-        // ── Infrastructure services ───────────────────────────────────────────
-        builder.Services.AddSingleton<IGitHubService,    GitHubService>();
-        builder.Services.AddSingleton<IChunkingService,  ChunkingService>();
-        builder.Services.AddSingleton<IClipboardService, MauiClipboardService>();
-        builder.Services.AddSingleton<IShareService,     MauiShareService>();
-        builder.Services.AddSingleton<ILocalFileService, LocalFileService>();
+        // ── Services ──────────────────────────────────────────────────────
 
-        // ── Database (ISP split: one concrete, two interface registrations) ───
-        builder.Services.AddSingleton<DatabaseService>();
-        builder.Services.AddSingleton<IRepoRepository>  (sp => sp.GetRequiredService<DatabaseService>());
-        builder.Services.AddSingleton<IPromptRepository>(sp => sp.GetRequiredService<DatabaseService>());
+        builder.Services.AddSingleton<IGitHubService,            GitHubService>();
+        builder.Services.AddSingleton<IChunkingService,          ChunkingService>();
+        builder.Services.AddSingleton<IClipboardService,         MauiClipboardService>();
+        builder.Services.AddSingleton<IShareService,             MauiShareService>();
+        builder.Services.AddSingleton<IDatabaseService,          DatabaseService>();
+        builder.Services.AddSingleton<ILocalFileService,         LocalFileService>();
 
-        // ── Child ViewModels (singletons — share lifetime with the app) ───────
-        //
-        // Registration order matters for constructor injection:
-        // ChunkingViewModel depends on RepositoryViewModel + FilterViewModel,
-        // so those must be registered first.
-        builder.Services.AddSingleton<RepositoryViewModel>();
-        builder.Services.AddSingleton<FilterViewModel>();
-        builder.Services.AddSingleton<PromptsViewModel>();
-        builder.Services.AddSingleton<ChunkListViewModel>();
-        builder.Services.AddSingleton<ChunkingViewModel>();   // depends on Repo + Filter
+        // FIX C-1: FileTypeDetectorService was implemented and had the interface
+        // but was never registered in DI. It is now injected into MainViewModel
+        // to replace the duplicated local-directory walk in AutoDetectFileTypesAsync.
+        builder.Services.AddSingleton<IFileTypeDetectorService,  FileTypeDetectorService>();
 
-        // ── Orchestrator ──────────────────────────────────────────────────────
+        // ── UI ─────────────────────────────────────────────────────────────
+
+        // PromptsPage is NOT registered here: it is instantiated on-demand
+        // in MainPage.xaml.cs via Navigation.PushAsync(new PromptsPage(viewModel)).
+        // This avoids DI singleton lifecycle conflicts with the Navigation stack.
         builder.Services.AddSingleton<MainViewModel>();
-
-        // ── UI ────────────────────────────────────────────────────────────────
-        // PromptsPage is instantiated on-demand in MainPage.xaml.cs via
-        // Navigation.PushAsync(new PromptsPage(viewModel.Prompts)).
         builder.Services.AddSingleton<MainPage>();
 
 #if DEBUG

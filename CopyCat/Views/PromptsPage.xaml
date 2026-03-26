@@ -1,17 +1,4 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!--
-  PromptsPage.xaml
-  ────────────────────────────────────────────────────────────────────
-  ITEM 5: Prompt card Zone B now uses ChunkActionBtn + CopiedBadge,
-          matching the chunk card copy-button design exactly.
-          Selection dot in Zone A mirrors chunk card selection dot.
-
-  ITEM 7: Edit panel has an optional guided builder panel injected
-          between the title field and the content editor.
-          The builder panel is shown/hidden via a toggle button.
-          Selecting roles + output format generates XML into EditContent.
-          Free-text editing still works as before.
--->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:CopyCat.ViewModels"
@@ -24,7 +11,7 @@
 
     <Grid RowDefinitions="*,Auto">
 
-        <!-- ═════════════════════════ SCROLLABLE CONTENT ═════════════════════ -->
+        <!-- ═══════════════════════════════════════ SCROLLABLE CONTENT -->
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Default">
             <VerticalStackLayout Padding="14,14,14,8" Spacing="0">
 
@@ -33,109 +20,88 @@
                         StrokeThickness="1"
                         Stroke="{StaticResource AccentSecondBorder}"
                         StrokeShape="RoundRectangle 12"
-                        Padding="14,10" Margin="0,0,0,10"
-                        IsVisible="{Binding Prompts.HasSelectedPrompt}">
+                        Padding="14,10"
+                        Margin="0,0,0,10"
+                        IsVisible="{Binding HasSelectedPrompt}">
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
                         <Label Text="✓" TextColor="{StaticResource AccentSecond}"
                                FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
                         <VerticalStackLayout VerticalOptions="Center" Spacing="1">
                             <Label Text="ACTIVE PROMPT" Style="{StaticResource SectionTitle}"
                                    Margin="0" TextColor="{StaticResource AccentSecond}" />
-                            <Label Text="{Binding Prompts.SelectedPromptLabel}"
+                            <Label Text="{Binding SelectedPromptLabel}"
                                    TextColor="{StaticResource TextPrimary}"
                                    FontSize="13" FontFamily="OpenSansSemibold" />
                         </VerticalStackLayout>
                     </HorizontalStackLayout>
                 </Border>
 
-                <Label Text="Tap the left zone of any card to select it as your active prompt. Copy it first, then copy your chunks one by one."
+                <!-- Hint when no prompt selected -->
+                <Label Text="Tap the left zone of any prompt card to select it. The selected prompt is automatically prepended when you copy or share chunks."
                        Style="{StaticResource HintLabel}"
                        Margin="0,0,0,10"
-                       IsVisible="{Binding Prompts.HasSelectedPrompt, Converter={StaticResource InverseBool}}" />
+                       IsVisible="{Binding HasSelectedPrompt, Converter={StaticResource InverseBool}}" />
 
-                <!-- ══ PROMPT CARDS ════════════════════════════════════════════ -->
+                <!-- ══ PROMPT CARDS — BindableLayout -->
                 <VerticalStackLayout Spacing="0">
                     <BindableLayout.ItemsSource>
-                        <Binding Path="Prompts.Prompts" />
+                        <Binding Path="Prompts" />
                     </BindableLayout.ItemsSource>
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="models:PromptItem">
 
-                            <!-- ── Card border: teal when selected, amber when modified ── -->
-                            <Border Style="{StaticResource ChunkBorder}"
-                                    Stroke="{Binding IsSelectedForShare, Converter={StaticResource PromptBorderConv}}"
+                            <!--
+                                FIX B-1: CardBorderColor returns Color; Stroke is Brush.
+                                ColorToBrushConverter wraps Color → SolidColorBrush so the
+                                amber (modified) and teal (copied) borders actually render.
+                            -->
+                            <Border Style="{StaticResource PromptCardBorder}"
+                                    Stroke="{Binding CardBorderColor, Converter={StaticResource ColorToBrushConv}}"
                                     StrokeThickness="{Binding CardBorderThickness}">
                                 <VerticalStackLayout Spacing="0">
 
-                                    <!-- Three-zone grid -->
                                     <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,90">
 
-                                        <!-- ZONE A — Select (tap = toggle IsSelectedForShare) -->
+                                        <!-- ZONE A — Select -->
                                         <Grid Grid.Row="0" Grid.Column="0"
                                               BackgroundColor="{Binding ZoneABackground}"
-                                              Padding="14,12,10,12">
-                                            <!-- ITEM 5: selection dot matches chunk card dot -->
-                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                                <Border Grid.Column="0"
-                                                        Style="{StaticResource SelectionDot}"
-                                                        BackgroundColor="{Binding IsSelectedForShare, Converter={StaticResource SelectionDotBgConv}}"
-                                                        Stroke="{Binding IsSelectedForShare, Converter={StaticResource SelectionDotBorderConv}}"
-                                                        VerticalOptions="Center">
-                                                    <Label Style="{StaticResource SelectionDotCheck}"
-                                                           IsVisible="{Binding IsSelectedForShare}" />
-                                                </Border>
-                                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                                    <Label Text="{Binding Title}" Style="{StaticResource ChunkTitleLabel}" />
-                                                    <Label Text="{Binding PreviewText}"
-                                                           TextColor="{StaticResource TextMuted}"
-                                                           FontSize="12"
-                                                           LineBreakMode="TailTruncation"
-                                                           MaxLines="2"
-                                                           IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}" />
-                                                </VerticalStackLayout>
-                                            </Grid>
+                                              Padding="12,10">
+                                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding Title}" Style="{StaticResource PromptTitleLabel}" />
+                                                <Label Text="{Binding PreviewText}"
+                                                       Style="{StaticResource PromptPreviewLabel2}"
+                                                       IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}" />
+                                            </VerticalStackLayout>
                                             <Grid.GestureRecognizers>
                                                 <TapGestureRecognizer
-                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.SelectPromptForShareCommand}"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.SelectPromptForShareCommand}"
                                                     CommandParameter="{Binding .}" />
                                             </Grid.GestureRecognizers>
                                         </Grid>
 
-                                        <!-- Zone A/B separator -->
                                         <BoxView Grid.Row="0" Grid.Column="0"
                                                  HorizontalOptions="End"
                                                  Style="{StaticResource CardZoneSeparatorView}" />
 
-                                        <!-- ZONE B — ITEM 5: CopiedBadge + ChunkActionBtn + edit/reset -->
+                                        <!-- ZONE B — Copy/Edit/Reset -->
                                         <VerticalStackLayout Grid.Row="0" Grid.Column="1"
                                                              Spacing="4" VerticalOptions="Center"
                                                              HorizontalOptions="Center"
                                                              Padding="0,8">
-                                            <!-- Copied badge — same as chunk card -->
-                                            <Border Style="{StaticResource CopiedBadgeBorder}"
-                                                    IsVisible="{Binding IsCopied}"
-                                                    HorizontalOptions="Center">
-                                                <Label Style="{StaticResource CopiedBadgeLabel}" />
-                                            </Border>
-                                            <!-- Copy — ChunkActionBtn style -->
-                                            <Button Text="Copy"
-                                                    Style="{StaticResource ChunkActionBtn}"
-                                                    MinimumWidthRequest="68"
-                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.CopyPromptCommand}"
+                                            <Button Style="{StaticResource SmallIconBtn}" Text="📋"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.CopyPromptCommand}"
                                                     CommandParameter="{Binding .}"
                                                     ToolTipProperties.Text="Copy prompt text to clipboard" />
-                                            <!-- Edit -->
                                             <Button Style="{StaticResource SmallIconBtn}" Text="✎"
                                                     IsVisible="{Binding IsEditing, Converter={StaticResource InverseBool}}"
-                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.StartEditPromptCommand}"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.StartEditPromptCommand}"
                                                     CommandParameter="{Binding .}"
-                                                    ToolTipProperties.Text="Edit title and content" />
-                                            <!-- Reset (built-ins only) -->
+                                                    ToolTipProperties.Text="Edit this prompt's title and content" />
                                             <Button Style="{StaticResource SmallIconBtn}" Text="↺"
                                                     IsVisible="{Binding IsBuiltIn}"
-                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.ResetSinglePromptCommand}"
+                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.ResetSinglePromptCommand}"
                                                     CommandParameter="{Binding .}"
-                                                    ToolTipProperties.Text="Restore to factory default text" />
+                                                    ToolTipProperties.Text="Restore this built-in prompt to its factory default text" />
                                         </VerticalStackLayout>
 
                                         <!-- ZONE C — Expand strip -->
@@ -146,7 +112,8 @@
                                                        Text="{Binding PreviewToggleIcon}"
                                                        TextColor="{StaticResource TextMuted}"
                                                        FontSize="11" VerticalOptions="Center"
-                                                       HorizontalTextAlignment="Center" />
+                                                       HorizontalTextAlignment="Center"
+                                                       ToolTipProperties.Text="Expand to read the full prompt text" />
                                                 <Label Grid.Column="1"
                                                        Text="Full text"
                                                        TextColor="{StaticResource TextDim}"
@@ -154,7 +121,7 @@
                                                        Margin="0,0,14,0" />
                                                 <Grid.GestureRecognizers>
                                                     <TapGestureRecognizer
-                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.TogglePromptPreviewCommand}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.TogglePromptPreviewCommand}"
                                                         CommandParameter="{Binding .}" />
                                                 </Grid.GestureRecognizers>
                                             </Grid>
@@ -168,7 +135,13 @@
                                         <Label Text="{Binding Content}" Style="{StaticResource PromptPreviewLabel}" />
                                     </Border>
 
-                                    <!-- ══ Edit panel (IsEditing = true) ═══════════════════════════ -->
+                                    <!-- ═══ Edit panel ═══════════════════════════════════════════════
+                                         Phase 4: Added Freehand / Builder mode toggle above the editor.
+                                         When IsBuilderMode is true, the XML tag palette is shown so
+                                         the user can append structured XML snippets to EditContent.
+                                         Freehand editing remains possible at all times — the builder
+                                         only appends to the existing editor content.
+                                    -->
                                     <Border Style="{StaticResource PromptEditBorder}"
                                             IsVisible="{Binding IsEditing}">
                                         <VerticalStackLayout Spacing="8">
@@ -180,228 +153,93 @@
                                                        Placeholder="Prompt title…" />
                                             </Border>
 
-                                            <!--
-                                                ITEM 7: Guided builder toggle button.
-                                                The builder panel lives on PromptsViewModel.Builder.
-                                                It is only shown when Builder is not null (set in StartEditPrompt).
+                                            <!-- Mode toggle: Freehand | Builder -->
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                                <Button Grid.Column="0"
+                                                        Text="✏️ Freehand"
+                                                        BackgroundColor="{Binding IsBuilderMode, Converter={StaticResource InverseBuildModeActiveBgConv}}"
+                                                        TextColor="{Binding IsBuilderMode, Converter={StaticResource InverseBuildModeActiveTextConv}}"
+                                                        FontSize="12" CornerRadius="8"
+                                                        MinimumHeightRequest="34"
+                                                        BorderWidth="1"
+                                                        BorderColor="{Binding IsBuilderMode, Converter={StaticResource InverseBuildModeActiveBorderConv}}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.ToggleBuilderModeCommand}"
+                                                        CommandParameter="{Binding .}"
+                                                        ToolTipProperties.Text="Switch to freehand text editing. The editor is always editable." />
+                                                <Button Grid.Column="1"
+                                                        Text="🧱 XML Builder"
+                                                        BackgroundColor="{Binding IsBuilderMode, Converter={StaticResource BuilderModeActiveBgConv}}"
+                                                        TextColor="{Binding IsBuilderMode, Converter={StaticResource BuilderModeActiveTextConv}}"
+                                                        FontSize="12" CornerRadius="8"
+                                                        MinimumHeightRequest="34"
+                                                        BorderWidth="1"
+                                                        BorderColor="{Binding IsBuilderMode, Converter={StaticResource BuilderModeActiveBorderConv}}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.ToggleBuilderModeCommand}"
+                                                        CommandParameter="{Binding .}"
+                                                        ToolTipProperties.Text="Show the XML tag button palette. Tapping a tag appends an XML snippet to the prompt." />
+                                            </Grid>
+
+                                            <!-- ══ XML Builder palette (Phase 4) ══════════════════════
+                                                 Shown when IsBuilderMode=true.
+                                                 Each button appends its tag pair + placeholder to EditContent.
+                                                 Built-in tags use teal style; custom tags use amber style.
+                                                 The "+ Custom tag" button triggers a dialog via event.
                                             -->
-                                            <Button Text="🧩 Build with guided roles (optional)"
-                                                    Style="{StaticResource SmallIconBtn}"
-                                                    HorizontalOptions="Start"
-                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.ToggleBuilderCommand}"
-                                                    IsVisible="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.HasBuilder}"
-                                                    ToolTipProperties.Text="Open the role selector to build a structured multi-role prompt. Optional — you can still write freehand below." />
-
-                                            <!-- ITEM 7: Builder panel — shown when builder is visible -->
-                                            <Border BackgroundColor="#0A0A18"
-                                                    Stroke="#2D2D50"
-                                                    StrokeThickness="1"
-                                                    StrokeShape="RoundRectangle 8"
-                                                    Padding="12,10"
-                                                    IsVisible="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.IsBuilderVisible}">
-                                                <VerticalStackLayout Spacing="10">
-
-                                                    <!-- Role chips header -->
-                                                    <Label Text="SELECT ROLES"
+                                            <Border Style="{StaticResource BuilderPaletteBorder}"
+                                                    IsVisible="{Binding IsBuilderMode}">
+                                                <VerticalStackLayout Spacing="6">
+                                                    <Label Text="TAP A TAG TO INSERT IT INTO YOUR PROMPT"
                                                            Style="{StaticResource SectionTitle}"
-                                                           Margin="0" />
-                                                    <Label Text="Each selected role becomes an XML-tagged section instructing the AI to analyse from that perspective."
-                                                           TextColor="{StaticResource TextMuted}"
-                                                           FontSize="11"
-                                                           LineBreakMode="WordWrap" />
+                                                           Margin="0,0,0,4" />
 
-                                                    <!-- Role chip grid -->
+                                                    <!-- Tag chip palette -->
                                                     <FlexLayout Wrap="Wrap" Direction="Row" JustifyContent="Start">
                                                         <BindableLayout.ItemsSource>
                                                             <Binding Source="{x:Reference PromptsPageRef}"
-                                                                     Path="BindingContext.Prompts.Builder.Roles" />
+                                                                     Path="BindingContext.XmlTagButtons" />
                                                         </BindableLayout.ItemsSource>
                                                         <BindableLayout.ItemTemplate>
-                                                            <DataTemplate x:DataType="models:RoleSelectionItem">
-                                                                <Border Style="{StaticResource ChipBorder}"
-                                                                        BackgroundColor="{Binding IsSelected, Converter={StaticResource ChipIncludedBgConv}}"
-                                                                        Stroke="{Binding IsSelected, Converter={StaticResource ChipIncludedBorderConv}}"
-                                                                        Margin="0,0,4,4">
-                                                                    <VerticalStackLayout Spacing="1" Padding="2,0">
-                                                                        <Label Text="{Binding ChipLabel}"
-                                                                               Style="{StaticResource ChipLabel}"
-                                                                               TextColor="{Binding IsSelected, Converter={StaticResource ChipLabelColorConv}}" />
-                                                                        <Label Text="{Binding Description}"
-                                                                               TextColor="{StaticResource TextDim}"
-                                                                               FontSize="10"
-                                                                               LineBreakMode="TailTruncation"
-                                                                               MaxLines="1" />
-                                                                    </VerticalStackLayout>
-                                                                    <Border.GestureRecognizers>
-                                                                        <TapGestureRecognizer
-                                                                            Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.ToggleRoleCommand}"
-                                                                            CommandParameter="{Binding .}" />
-                                                                    </Border.GestureRecognizers>
-                                                                </Border>
+                                                            <DataTemplate x:DataType="models:XmlTagButton">
+                                                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,4,4">
+                                                                    <!-- Tag insert button — style differs for built-in vs custom -->
+                                                                    <Button Grid.Column="0"
+                                                                            Text="{Binding Label}"
+                                                                            Style="{StaticResource XmlTagChipBtn}"
+                                                                            Margin="0"
+                                                                            Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.AppendXmlTagCommand}"
+                                                                            CommandParameter="{Binding .}"
+                                                                            ToolTipProperties.Text="Insert this XML tag snippet at the end of the prompt" />
+                                                                    <!-- Delete button for custom tags only -->
+                                                                    <Button Grid.Column="1"
+                                                                            Text="✕"
+                                                                            Style="{StaticResource SmallIconBtn}"
+                                                                            TextColor="{StaticResource TextError}"
+                                                                            IsVisible="{Binding IsCustom}"
+                                                                            Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.DeleteXmlTagButtonCommand}"
+                                                                            CommandParameter="{Binding .}"
+                                                                            ToolTipProperties.Text="Delete this custom tag button" />
+                                                                </Grid>
                                                             </DataTemplate>
                                                         </BindableLayout.ItemTemplate>
                                                     </FlexLayout>
 
-                                                    <!-- Output format header -->
-                                                    <Label Text="OUTPUT FORMAT"
-                                                           Style="{StaticResource SectionTitle}"
-                                                           Margin="0,4,0,0" />
+                                                    <!-- Add custom tag button -->
+                                                    <Button Text="＋ Custom tag"
+                                                            Style="{StaticResource XmlTagCustomChipBtn}"
+                                                            HorizontalOptions="Start"
+                                                            Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.RequestAddCustomXmlTagCommand}"
+                                                            ToolTipProperties.Text="Create a reusable custom XML tag button with your own open/close tags and placeholder text" />
 
-                                                    <!-- Format option rows -->
-                                                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                                                          ColumnSpacing="10" RowSpacing="6">
-
-                                                        <!-- Free text -->
-                                                        <Border Grid.Row="0" Grid.Column="0"
-                                                                WidthRequest="16" HeightRequest="16"
-                                                                StrokeShape="Ellipse"
-                                                                Stroke="{StaticResource AccentPrimary}"
-                                                                BackgroundColor="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectedOutputFormatId,
-                                                                    Converter={StaticResource StringNotEmptyConv}}"
-                                                                VerticalOptions="Center">
-                                                            <Border.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="free" />
-                                                            </Border.GestureRecognizers>
-                                                        </Border>
-                                                        <Label Grid.Row="0" Grid.Column="1"
-                                                               Text="Free text (default)"
-                                                               TextColor="{StaticResource TextSecondary}"
-                                                               FontSize="12" VerticalOptions="Center">
-                                                            <Label.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="free" />
-                                                            </Label.GestureRecognizers>
-                                                        </Label>
-
-                                                        <!-- Numbered list -->
-                                                        <Border Grid.Row="1" Grid.Column="0"
-                                                                WidthRequest="16" HeightRequest="16"
-                                                                StrokeShape="Ellipse"
-                                                                Stroke="{StaticResource AccentPrimary}"
-                                                                VerticalOptions="Center">
-                                                            <Border.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="list" />
-                                                            </Border.GestureRecognizers>
-                                                        </Border>
-                                                        <Label Grid.Row="1" Grid.Column="1"
-                                                               Text="Numbered list"
-                                                               TextColor="{StaticResource TextSecondary}"
-                                                               FontSize="12" VerticalOptions="Center">
-                                                            <Label.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="list" />
-                                                            </Label.GestureRecognizers>
-                                                        </Label>
-
-                                                        <!-- Markdown table -->
-                                                        <Border Grid.Row="2" Grid.Column="0"
-                                                                WidthRequest="16" HeightRequest="16"
-                                                                StrokeShape="Ellipse"
-                                                                Stroke="{StaticResource AccentPrimary}"
-                                                                VerticalOptions="Center">
-                                                            <Border.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="table" />
-                                                            </Border.GestureRecognizers>
-                                                        </Border>
-                                                        <Label Grid.Row="2" Grid.Column="1"
-                                                               Text="Markdown table"
-                                                               TextColor="{StaticResource TextSecondary}"
-                                                               FontSize="12" VerticalOptions="Center">
-                                                            <Label.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="table" />
-                                                            </Label.GestureRecognizers>
-                                                        </Label>
-
-                                                        <!-- Structured XML output -->
-                                                        <Border Grid.Row="3" Grid.Column="0"
-                                                                WidthRequest="16" HeightRequest="16"
-                                                                StrokeShape="Ellipse"
-                                                                Stroke="{StaticResource AccentPrimary}"
-                                                                VerticalOptions="Center">
-                                                            <Border.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="xml_out" />
-                                                            </Border.GestureRecognizers>
-                                                        </Border>
-                                                        <Label Grid.Row="3" Grid.Column="1"
-                                                               Text="Structured XML output"
-                                                               TextColor="{StaticResource TextSecondary}"
-                                                               FontSize="12" VerticalOptions="Center">
-                                                            <Label.GestureRecognizers>
-                                                                <TapGestureRecognizer
-                                                                    Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.SelectOutputFormatCommand}"
-                                                                    CommandParameter="xml_out" />
-                                                            </Label.GestureRecognizers>
-                                                        </Label>
-                                                    </Grid>
-
-                                                    <!-- XML skeleton preview (live preview of assembled structure) -->
-                                                    <VerticalStackLayout
-                                                        IsVisible="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.HasSelectedRoles}"
-                                                        Spacing="4">
-                                                        <Label Text="PROMPT SKELETON PREVIEW"
-                                                               Style="{StaticResource SectionTitle}"
-                                                               Margin="0,4,0,0" />
-                                                        <Label Text="This is the XML structure that will be inserted into your prompt. You can edit the full text below after applying."
-                                                               TextColor="{StaticResource TextMuted}"
-                                                               FontSize="11"
-                                                               LineBreakMode="WordWrap" />
-                                                        <Border BackgroundColor="#060610"
-                                                                Stroke="#1E1E3A"
-                                                                StrokeThickness="1"
-                                                                StrokeShape="RoundRectangle 6"
-                                                                Padding="10,8">
-                                                            <Label Text="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.XmlSkeletonPreview}"
-                                                                   FontFamily="Courier New"
-                                                                   FontSize="11"
-                                                                   TextColor="{StaticResource AccentPrimary}"
-                                                                   LineBreakMode="WordWrap" />
-                                                        </Border>
-                                                    </VerticalStackLayout>
-
-                                                    <!-- Apply and Reset builder buttons -->
-                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                        <Button Grid.Column="0"
-                                                                Text="→ Apply to prompt text"
-                                                                Style="{StaticResource SecondaryBtn}"
-                                                                Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.ApplyBuilderToEditContentCommand}"
-                                                                CommandParameter="{Binding .}"
-                                                                IsEnabled="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.HasSelectedRoles}"
-                                                                ToolTipProperties.Text="Insert the assembled XML skeleton into the prompt text editor below. You can edit freely afterwards." />
-                                                        <Button Grid.Column="1"
-                                                                Text="↺ Reset"
-                                                                Style="{StaticResource SmallIconBtn}"
-                                                                Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.Builder.ResetBuilderCommand}"
-                                                                ToolTipProperties.Text="Clear all role selections and reset output format" />
-                                                    </Grid>
-
+                                                    <Label Text="Tip: use [PASTE CHUNK] (📎 Insert Code) to mark where CopyCat pastes the chunked code."
+                                                           Style="{StaticResource HintLabel}" Margin="0,2,0,0" />
                                                 </VerticalStackLayout>
                                             </Border>
 
-                                            <!-- Content editor — always visible when editing -->
-                                            <Label Text="PROMPT TEXT"
-                                                   Style="{StaticResource SectionTitle}"
-                                                   Margin="0,4,0,2" />
-                                            <Label Text="Use [PASTE CHUNK] as a placeholder for the code. If omitted, code is appended at the end."
-                                                   TextColor="{StaticResource TextMuted}"
-                                                   FontSize="11"
-                                                   LineBreakMode="WordWrap"
-                                                   Margin="0,0,0,4" />
+                                            <!-- Freehand editor — always visible -->
                                             <Border Style="{StaticResource InputBorder}">
                                                 <Editor Style="{StaticResource InlineEditor}"
                                                         Text="{Binding EditContent}"
-                                                        Placeholder="Prompt text… or tap 'Apply' above to insert the XML skeleton." />
+                                                        Placeholder="Prompt text… Use [PASTE CHUNK] where you want the code inserted. If omitted, code is appended after the prompt." />
                                             </Border>
 
                                             <!-- Save / Cancel / Delete row -->
@@ -409,22 +247,20 @@
                                                 <Button Grid.Column="0" Style="{StaticResource SmallIconBtn}"
                                                         Text="🗑 Delete"
                                                         IsVisible="{Binding IsBuiltIn, Converter={StaticResource InverseBool}}"
-                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.DeletePromptCommand}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.DeletePromptCommand}"
                                                         CommandParameter="{Binding .}"
                                                         TextColor="{StaticResource TextError}"
                                                         ToolTipProperties.Text="Permanently delete this custom prompt" />
                                                 <Button Grid.Column="1" Style="{StaticResource SecondaryBtn}" Text="Save"
-                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.SavePromptCommand}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.SavePromptCommand}"
                                                         CommandParameter="{Binding .}" />
                                                 <Button Grid.Column="2" Style="{StaticResource SmallIconBtn}" Text="Cancel"
-                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.Prompts.CancelEditPromptCommand}"
+                                                        Command="{Binding Source={x:Reference PromptsPageRef}, Path=BindingContext.CancelEditPromptCommand}"
                                                         CommandParameter="{Binding .}"
                                                         TextColor="{StaticResource TextSecondary}" />
                                             </Grid>
-
                                         </VerticalStackLayout>
                                     </Border>
-                                    <!-- ══ End edit panel ══════════════════════════════════════════ -->
 
                                 </VerticalStackLayout>
                             </Border>
@@ -433,30 +269,37 @@
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>
 
-                <!-- Add new prompt + Reset all -->
+                <!-- Add new prompt + Reset all buttons -->
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,24">
                     <Button Grid.Column="0" Text="+ New prompt"
                             Style="{StaticResource SecondaryBtn}"
-                            Command="{Binding Prompts.AddNewPromptCommand}"
+                            Command="{Binding AddNewPromptCommand}"
                             ToolTipProperties.Text="Create a new custom AI prompt" />
                     <Button Grid.Column="1" Text="↺ Reset all"
                             Style="{StaticResource ResetPromptsBtn}"
                             x:Name="ResetPromptsButton"
-                            ToolTipProperties.Text="Delete all custom prompts and restore the built-in defaults" />
+                            ToolTipProperties.Text="Delete all custom prompts and restore the 6 built-in defaults" />
                 </Grid>
 
             </VerticalStackLayout>
         </ScrollView>
 
-        <!-- ═════════════════════════ BOTTOM DONE BAR ════════════════════════ -->
+        <!-- ═══════════════════════════════════════ BOTTOM DONE BAR -->
         <Border Grid.Row="1"
                 BackgroundColor="{StaticResource BgSmartBar}"
                 StrokeThickness="1"
-                Stroke="{StaticResource BorderDefault}"
-                Padding="16,10,16,44">
+                Stroke="{StaticResource BorderDefault}">
+            <Border.Padding>
+                <OnPlatform x:TypeArguments="Thickness">
+                    <On Platform="iOS"     Value="16,10,16,44" />
+                    <On Platform="Android" Value="16,10,16,16" />
+                    <On Platform="WinUI"   Value="16,10,16,16" />
+                    <On Platform="MacCatalyst" Value="16,10,16,16" />
+                </OnPlatform>
+            </Border.Padding>
             <Button Text="← Done — return to chunking"
                     Style="{StaticResource SecondaryBtn}"
-                    Command="{Binding Prompts.GoBackCommand}"
+                    Command="{Binding GoBackCommand}"
                     ToolTipProperties.Text="Return to the main view. Your prompt selection is remembered." />
         </Border>
 

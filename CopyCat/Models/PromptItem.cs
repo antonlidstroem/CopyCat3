@@ -1,39 +1,38 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.Maui.Graphics;
+using SQLite;
 
 namespace CopyCat.Models;
 
-/// <summary>
-/// Observable UI model for an AI prompt card in the Prompts library.
-///
-/// Responsibilities
-/// ────────────────
-/// • Holds all mutable UI state (editing, selection, preview expand).
-/// • Exposes computed display helpers that XAML can bind to directly.
-/// • Provides <see cref="FromRecord"/> and <see cref="ToRecord"/> to
-///   translate to/from the <see cref="PromptRecord"/> DB entity.
-///
-/// Why not inherit from PromptRecord?
-/// ───────────────────────────────────
-/// SQLite-net maps every public property it finds.  Mixing in
-/// ObservableProperty backing fields and UI-only computed properties
-/// would pollute the DB schema with phantom columns or require [Ignore]
-/// on every UI property — error-prone and noisy.  Keeping the two
-/// classes separate is cleaner and explicit.
-/// </summary>
+// ── Persisted record (SQLite) ──────────────────────────────────────────────
+
+[Table("Prompts")]
+public class PromptRecord
+{
+    [PrimaryKey, AutoIncrement]
+    public int    Id        { get; set; }
+    public string Title     { get; set; } = string.Empty;
+    public string Content   { get; set; } = string.Empty;
+    public bool   IsBuiltIn { get; set; }
+    public int    SortOrder { get; set; }
+}
+
+// ── Observable UI wrapper ──────────────────────────────────────────────────
+
 public partial class PromptItem : ObservableObject
 {
-    // ── DB identity (round-trips through PromptRecord) ────────────────────────
+    public int  Id        { get; set; }
+    public bool IsBuiltIn { get; set; }
 
-    public int Id                { get; set; }
-    public int OriginalSortOrder { get; set; }
-    public bool IsBuiltIn        { get; set; }
-
-    // ── Observable data fields ────────────────────────────────────────────────
+    /// <summary>
+    /// The SortOrder this prompt was seeded with (0–5 for built-ins).
+    /// Used to look up the factory content in <see cref="Services.BuiltInPrompts"/>
+    /// for reliable single-prompt reset — independent of what is saved in SQLite.
+    /// </summary>
+    public int OriginalSortOrder { get; init; } = -1;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewText))]
     [NotifyPropertyChangedFor(nameof(IsModifiedOrCustom))]
-    [NotifyPropertyChangedFor(nameof(CardBorderThickness))]
     private string _title = string.Empty;
 
     [ObservableProperty]
@@ -41,79 +40,114 @@ public partial class PromptItem : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsModifiedOrCustom))]
     private string _content = string.Empty;
 
-    // ── UI state ─────────────────────────────────────────────────────────────
+    // ── Edit-mode state ────────────────────────────────────────────────────
 
-    /// <summary>Whether this prompt is the active selection prepended to every copy.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
-    private bool _isSelectedForShare;
+    [ObservableProperty] private bool   _isEditing;
+    [ObservableProperty] private string _editTitle   = string.Empty;
+    [ObservableProperty] private string _editContent = string.Empty;
 
-    /// <summary>Whether the inline edit panel is open.</summary>
-    [ObservableProperty]
-    private bool _isEditing;
+    // ── Phase 4: XML Prompt Builder mode ──────────────────────────────────
 
-    /// <summary>Whether the full-text preview strip is expanded.</summary>
+    /// <summary>
+    /// When true, the prompt edit panel shows the XML tag button palette
+    /// instead of (or alongside) the raw freehand editor.
+    /// Freehand editing is always possible — the builder just appends tag
+    /// snippets to EditContent via ViewModel.AppendXmlTagCommand.
+    /// </summary>
+    [ObservableProperty] private bool _isBuilderMode;
+
+    // ── Full-text preview toggle ───────────────────────────────────────────
+
+    /// <summary>
+    /// Only one prompt preview should be open at a time.
+    /// MainViewModel.TogglePromptPreviewCommand enforces mutual exclusion.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewToggleIcon))]
     private bool _isPreviewExpanded;
 
-    /// <summary>Whether the clipboard-copy flash animation is showing.</summary>
-    [ObservableProperty]
-    private bool _isCopied;
-
-    /// <summary>Editable title scratch pad (discarded if user hits Cancel).</summary>
-    [ObservableProperty]
-    private string _editTitle = string.Empty;
-
-    /// <summary>Editable content scratch pad (discarded if user hits Cancel).</summary>
-    [ObservableProperty]
-    private string _editContent = string.Empty;
-
-    // ── Computed display helpers ──────────────────────────────────────────────
-
-    /// <summary>
-    /// True when the prompt has been modified from its built-in default,
-    /// or is a user-created custom prompt.
-    /// Drives the amber border on modified cards.
-    /// </summary>
-    public bool IsModifiedOrCustom => !IsBuiltIn;
-
-    /// <summary>First ~80 characters of content for the card preview line.</summary>
-    public string PreviewText =>
-        Content.Length <= 80 ? Content : Content[..80].TrimEnd() + "…";
-
-    /// <summary>Icon on the Zone C preview expand strip.</summary>
     public string PreviewToggleIcon => IsPreviewExpanded ? "▲" : "▼";
 
-    /// <summary>Zone A background tint when the prompt is selected.</summary>
+    // ── Copy feedback ──────────────────────────────────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderThickness))]
+    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
+    private bool _isCopied;
+
+    // ── Single-select for share ────────────────────────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CardBackgroundColor))]
+    [NotifyPropertyChangedFor(nameof(CardBorderColor))]
+    [NotifyPropertyChangedFor(nameof(ZoneABackground))]
+    private bool _isSelectedForShare;
+
+    // ── Visual distinction: pristine built-in vs modified/custom ──────────
+
+    /// <summary>
+    /// True when this prompt has been edited from its factory default,
+    /// or when it is user-created.  Controls card border color:
+    ///   false (pristine built-in)  → quiet teal border
+    ///   true  (modified or custom) → amber accent border
+    /// </summary>
+    public bool IsModifiedOrCustom
+    {
+        get
+        {
+            if (!IsBuiltIn) return true;   // user-created
+            if (OriginalSortOrder < 0)     return false;  // unknown seed → treat as pristine
+            if (!Services.BuiltInPrompts.BySortOrder.TryGetValue(OriginalSortOrder, out var seed))
+                return false;
+            return Title != seed.Title || Content != seed.Content;
+        }
+    }
+
+    // ── C2: Three-zone card colours ───────────────────────────────────────
+
+    /// <summary>Zone A (select area) background color.</summary>
     public Color ZoneABackground =>
-        IsSelectedForShare
-            ? Color.FromArgb("#0D2A2B")   // teal tint
-            : Colors.Transparent;
+        IsSelectedForShare ? Color.FromArgb("#1C1406") : Color.FromArgb("#0D2128");
 
-    /// <summary>Border thickness — thicker on modified/custom prompts.</summary>
-    public double CardBorderThickness => IsModifiedOrCustom ? 1.5 : 0.8;
+    /// <summary>Full card border color — teal when copied, type-based otherwise.</summary>
+    public Color CardBorderColor =>
+        IsCopied ? Color.FromArgb("#00B4BC") :
+        IsModifiedOrCustom ? Color.FromArgb("#F59E0B") :
+                             Color.FromArgb("#1A3D4A");
 
-    // ── Mapping ───────────────────────────────────────────────────────────────
+    /// <summary>Card border thickness — heavier when copied to signal completion.</summary>
+    public double CardBorderThickness => IsCopied ? 2.5 : 1.5;
 
-    /// <summary>Creates a <see cref="PromptItem"/> from a DB record.</summary>
+    /// <summary>Legacy background property kept for compatibility.</summary>
+    public Color CardBackgroundColor =>
+        IsCopied           ? Color.FromArgb("#061A1B") :
+        IsSelectedForShare ? Color.FromArgb("#1A1406") :
+                             Color.FromArgb("#0D2128");
+
+    // ── Derived ───────────────────────────────────────────────────────────
+
+    public string PreviewText =>
+        Content.Length > 160 ? Content[..160].TrimEnd() + "…" : Content;
+
+    // ── Factory ───────────────────────────────────────────────────────────
+
     public static PromptItem FromRecord(PromptRecord r) => new()
     {
-        Id                = r.Id,
-        OriginalSortOrder = r.SortOrder,
-        IsBuiltIn         = r.IsBuiltIn,
-        Title             = r.Title,
-        Content           = r.Content,
+        Id               = r.Id,
+        Title            = r.Title,
+        Content          = r.Content,
+        IsBuiltIn        = r.IsBuiltIn,
+        OriginalSortOrder = r.IsBuiltIn ? r.SortOrder : -1,
     };
 
-    /// <summary>Converts this item back to a DB record for persistence.</summary>
-    public PromptRecord ToRecord(int currentIndex) => new()
+    public PromptRecord ToRecord(int sortOrder = 0) => new()
     {
-        Id         = Id,
-        Title      = Title.Trim(),
-        Content    = Content.Trim(),
-        SortOrder  = OriginalSortOrder > 0 ? OriginalSortOrder : currentIndex + 100,
-        IsBuiltIn  = IsBuiltIn,
-        IsModified = IsBuiltIn && (Title != Content), // conservative flag
+        Id        = Id,
+        Title     = Title,
+        Content   = Content,
+        IsBuiltIn = IsBuiltIn,
+        SortOrder = sortOrder,
     };
 }
