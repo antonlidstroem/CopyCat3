@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text.Json;
 
 // LibGit2Sharp is only available on desktop targets.
@@ -36,9 +36,9 @@ public class FileTypeDetectorService : IFileTypeDetectorService
     }
 
     public async Task<List<string>> DetectExtensionsAsync(
-        string            repoUrlOrPath,
-        string?           accessToken,
-        string            branch,
+        string repoUrlOrPath,
+        string? accessToken,
+        string branch,
         CancellationToken cancellationToken = default)
     {
         try
@@ -100,14 +100,14 @@ public class FileTypeDetectorService : IFileTypeDetectorService
     private static List<string> DetectFromDirectory(string baseDir)
     {
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var queue  = new Queue<string>(new[] { baseDir });
+        var queue = new Queue<string>(new[] { baseDir });
 
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
 
             IEnumerable<string> files;
-            try   { files = Directory.EnumerateFiles(current); }
+            try { files = Directory.EnumerateFiles(current); }
             catch { continue; }
 
             foreach (var file in files)
@@ -118,7 +118,7 @@ public class FileTypeDetectorService : IFileTypeDetectorService
             }
 
             IEnumerable<string> subdirs;
-            try   { subdirs = Directory.EnumerateDirectories(current); }
+            try { subdirs = Directory.EnumerateDirectories(current); }
             catch { continue; }
 
             foreach (var sub in subdirs) queue.Enqueue(sub);
@@ -128,9 +128,9 @@ public class FileTypeDetectorService : IFileTypeDetectorService
     }
 
     private async Task<List<string>> DetectFromGitHubAsync(
-        string            repoUrl,
-        string?           accessToken,
-        string            branch,
+        string repoUrl,
+        string? accessToken,
+        string branch,
         CancellationToken cancellationToken)
     {
         var (owner, repo) = GitHubUrlParser.Parse(repoUrl);
@@ -149,7 +149,7 @@ public class FileTypeDetectorService : IFileTypeDetectorService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var url     = $"https://api.github.com/repos/{owner}/{repo}/git/trees/{candidate}?recursive=1";
+            var url = $"https://api.github.com/repos/{owner}/{repo}/git/trees/{candidate}?recursive=1";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
 
@@ -205,7 +205,7 @@ public class FileTypeDetectorService : IFileTypeDetectorService
     private static string ResolveLocalDir(string path)
     {
         var t = path.Trim().Trim('"');
-        return (t.EndsWith(".sln",    StringComparison.OrdinalIgnoreCase) ||
+        return (t.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
                 t.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             ? (Path.GetDirectoryName(t) ?? t)
             : t;

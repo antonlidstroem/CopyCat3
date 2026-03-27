@@ -4,9 +4,9 @@ namespace CopyCat.Views;
 
 public partial class PromptsPage : ContentPage
 {
-    private readonly MainViewModel _viewModel;
+    private readonly PromptsViewModel _viewModel;
 
-    public PromptsPage(MainViewModel viewModel)
+    public PromptsPage(PromptsViewModel viewModel)
     {
         InitializeComponent();
         BindingContext = _viewModel = viewModel;

@@ -1,13 +1,12 @@
+using CopyCat.ViewModels;
+
 namespace CopyCat.Views.Results;
 
-/// <summary>
-/// Code-behind for ChunkListView.xaml.
-/// BindingContext is inherited from MainPage — no additional wiring needed.
-/// </summary>
 public partial class ChunkListView : ContentView
 {
-    public ChunkListView()
+    public ChunkListView(ChunkListViewModel viewModel)
     {
         InitializeComponent();
+        BindingContext = viewModel;
     }
 }

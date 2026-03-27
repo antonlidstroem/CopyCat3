@@ -23,7 +23,9 @@ namespace CopyCat.ViewModels;
 /// </summary>
 public partial class PromptsViewModel : ObservableObject,
     IRecipient<RepoSelectedMessage>
+
 {
+    public event EventHandler? CustomXmlTagRequested;
     private readonly IPromptRepository           _promptRepo;
     private readonly ILogger<PromptsViewModel>   _logger;
 
@@ -31,6 +33,13 @@ public partial class PromptsViewModel : ObservableObject,
 
     public event EventHandler? NavigateToPromptsPageRequested;
     public event EventHandler? GoBackRequested;
+
+    // I PromptsViewModel.cs
+    [RelayCommand]
+    private void RequestAddCustomXmlTag() // Detta genererar RequestAddCustomXmlTagCommand
+    {
+        CustomXmlTagRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     public PromptsViewModel(
         IPromptRepository         promptRepo,

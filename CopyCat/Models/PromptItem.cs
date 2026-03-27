@@ -5,16 +5,7 @@ namespace CopyCat.Models;
 
 // ── Persisted record (SQLite) ──────────────────────────────────────────────
 
-[Table("Prompts")]
-public class PromptRecord
-{
-    [PrimaryKey, AutoIncrement]
-    public int    Id        { get; set; }
-    public string Title     { get; set; } = string.Empty;
-    public string Content   { get; set; } = string.Empty;
-    public bool   IsBuiltIn { get; set; }
-    public int    SortOrder { get; set; }
-}
+
 
 // ── Observable UI wrapper ──────────────────────────────────────────────────
 

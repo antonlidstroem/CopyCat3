@@ -82,9 +82,9 @@ public static class FileTypeCatalog
         foreach (var (label, exts, on) in Entries)
             yield return new FileTypeFilter
             {
-                Label      = label,
-                Extensions = exts,
-                IsEnabled  = on,
+                Label = label,
+                Extensions = exts.ToList(),  // <-- must be .ToList(), not raw string[]
+                IsEnabled = on,
             };
     }
 

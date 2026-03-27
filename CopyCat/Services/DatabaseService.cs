@@ -1,4 +1,4 @@
-using CopyCat.Models;
+﻿using CopyCat.Models;
 using SQLite;
 
 namespace CopyCat.Services;
@@ -14,7 +14,7 @@ namespace CopyCat.Services;
 public class DatabaseService : IDatabaseService, IAsyncDisposable
 {
     private SQLiteAsyncConnection? _db;
-    private readonly string        _dbPath;
+    private readonly string _dbPath;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     public DatabaseService()
@@ -102,7 +102,7 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         var db = await Db();
         repo.LastUsed = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (repo.Id == 0) await db.InsertAsync(repo);
-        else              await db.UpdateAsync(repo);
+        else await db.UpdateAsync(repo);
         return repo;
     }
 
@@ -151,7 +151,7 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
     {
         var db = await Db();
         if (prompt.Id == 0) await db.InsertAsync(prompt);
-        else                await db.UpdateAsync(prompt);
+        else await db.UpdateAsync(prompt);
         return prompt;
     }
 
@@ -182,7 +182,7 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
     {
         var db = await Db();
         if (tag.Id == 0) await db.InsertAsync(tag);
-        else             await db.UpdateAsync(tag);
+        else await db.UpdateAsync(tag);
         return tag;
     }
 
@@ -196,7 +196,7 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 
     private async Task SeedBuiltInPromptsIfEmptyAsync()
     {
-        var db    = await Db();
+        var db = await Db();
         var count = await db.Table<PromptRecord>().CountAsync();
         if (count > 0) return;
         await SeedBuiltInPromptsAsync(db);
@@ -208,8 +208,8 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
         {
             await db.InsertAsync(new PromptRecord
             {
-                Title     = seed.Title,
-                Content   = seed.Content,
+                Title = seed.Title,
+                Content = seed.Content,
                 IsBuiltIn = true,
                 SortOrder = sortOrder,
             });
@@ -218,7 +218,7 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
 
     private async Task SeedBuiltInXmlTagsIfEmptyAsync()
     {
-        var db    = await Db();
+        var db = await Db();
         var count = await db.Table<XmlTagButton>().CountAsync();
         if (count > 0) return;
 
@@ -227,12 +227,12 @@ public class DatabaseService : IDatabaseService, IAsyncDisposable
             var seed = BuiltInXmlTags.Seeds[i];
             await db.InsertAsync(new XmlTagButton
             {
-                Label       = seed.Label,
-                XmlOpen     = seed.XmlOpen,
-                XmlClose    = seed.XmlClose,
+                Label = seed.Label,
+                XmlOpen = seed.XmlOpen,
+                XmlClose = seed.XmlClose,
                 Placeholder = seed.Placeholder,
-                IsBuiltIn   = true,
-                SortOrder   = i,
+                IsBuiltIn = true,
+                SortOrder = i,
             });
         }
     }

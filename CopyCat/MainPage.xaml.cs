@@ -7,22 +7,26 @@ namespace CopyCat;
 public partial class MainPage : ContentPage
 {
     private readonly MainViewModel _viewModel;
+    private readonly PromptsViewModel _promptsViewModel;
 
-    public MainPage(MainViewModel viewModel)
+    public MainPage(MainViewModel viewModel, PromptsViewModel promptsViewModel)
     {
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
 
+        var repo = viewModel.Repo;
+        var prompts = viewModel.Prompts;
+
         // ── Branch picker ──────────────────────────────────────────────────
-        _viewModel.BranchPickerRequested += async (_, branches) =>
+        repo.BranchPickerRequested += async (_, branches) =>
         {
             var result = await DisplayActionSheet("Select branch", "Cancel", null, [.. branches]);
             if (result is not null and not "Cancel")
-                _viewModel.Branch = result;
+                repo.Branch = result;
         };
 
         // ── Token info dialog ──────────────────────────────────────────────
-        _viewModel.TokenInfoRequested += async (_, _) =>
+        repo.TokenInfoRequested += async (_, _) =>
         {
             await DisplayAlert(
                 "GitHub Personal Access Token",
@@ -38,27 +42,27 @@ public partial class MainPage : ContentPage
         };
 
         // ── Generic info dialog (tooltip fallback for mobile) ─────────────
-        _viewModel.ShowInfoRequested += async (_, message) =>
+        repo.ShowInfoRequested += async (_, message) =>
         {
             if (!string.IsNullOrWhiteSpace(message))
                 await DisplayAlert("Info", message, "OK");
         };
 
         // ── Repo rename ────────────────────────────────────────────────────
-        _viewModel.RepoRenameRequested += async (_, repo) =>
+        repo.RepoRenameRequested += async (_, repoItem) =>
         {
             var name = await DisplayPromptAsync(
                 "Name this repository",
                 "Enter a friendly label:",
-                initialValue: repo.Name,
+                initialValue: repoItem.Name,
                 placeholder: "e.g. My API Project",
                 maxLength: 60);
             if (name is not null)
-                await _viewModel.SetRepoNameAsync(repo, name);
+                await repo.SetRepoNameAsync(repoItem, name);
         };
 
         // ── History popup ──────────────────────────────────────────────────
-        _viewModel.ShowHistoryRequested += async (_, repos) =>
+        repo.ShowHistoryRequested += async (_, repos) =>
         {
             if (repos.Count == 0)
             {
@@ -70,20 +74,23 @@ public partial class MainPage : ContentPage
                 repos.Select(r => r.DisplayName).ToArray());
             if (picked is null or "Cancel") return;
             var chosen = repos.FirstOrDefault(r => r.DisplayName == picked);
-            if (chosen is not null) _viewModel.SelectRepoCommand.Execute(chosen);
+            if (chosen is not null) repo.SelectRepoCommand.Execute(chosen);
         };
 
         // ── Navigate to PromptsPage ────────────────────────────────────────
-        _viewModel.NavigateToPromptsPageRequested += async (_, _) =>
+        prompts.NavigateToPromptsPageRequested += async (_, _) =>
         {
-            var page = new PromptsPage(_viewModel);
+            var page = new PromptsPage(promptsViewModel);
             await Navigation.PushAsync(page);
         };
 
+        prompts.GoBackRequested += async (_, _) =>
+        {
+            await Navigation.PopAsync();
+        };
+
         // ── Phase 4: Custom XML tag dialog ────────────────────────────────
-        // Raised by RequestAddCustomXmlTagCommand in the prompt builder palette.
-        // Shows a simple multi-step prompt dialog to collect tag metadata.
-        _viewModel.CustomXmlTagRequested += async (_, _) =>
+        promptsViewModel.CustomXmlTagRequested += async (_, _) =>
         {
             var label = await DisplayPromptAsync(
                 "New XML Tag Button",
@@ -116,6 +123,7 @@ public partial class MainPage : ContentPage
 
             await _viewModel.AddCustomXmlTagAsync(label, xmlOpen ?? string.Empty, xmlClose, placeholder);
         };
+        _promptsViewModel = promptsViewModel;
     }
 
     protected override async void OnAppearing()
@@ -127,13 +135,13 @@ public partial class MainPage : ContentPage
 
             if (!string.IsNullOrWhiteSpace(SharedUrlService.PendingUrl))
             {
-                _viewModel.RepoUrl          = SharedUrlService.PendingUrl;
+                _viewModel.Repo.RepoUrl = SharedUrlService.PendingUrl;
                 SharedUrlService.PendingUrl = null;
             }
         }
         catch (Exception ex)
         {
-            _viewModel.StatusText = $"⚠️ Startup error: {ex.Message}";
+            _viewModel.Chunking.StatusText = $"⚠️ Startup error: {ex.Message}";
         }
     }
 }
