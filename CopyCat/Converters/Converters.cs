@@ -50,3 +50,20 @@ public class BoolToStringConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotImplementedException();
 }
+
+/// <summary>
+/// Converts a bool to a <see cref="TextDecorations"/> value.
+/// Used to strike-through excluded file names in the chunk preview panel.
+/// Defaults: true → None, false → Strikethrough.
+/// </summary>
+public class BoolToTextDecorationsConverter : IValueConverter
+{
+    public TextDecorations TrueValue  { get; set; } = TextDecorations.None;
+    public TextDecorations FalseValue { get; set; } = TextDecorations.Strikethrough;
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? TrueValue : FalseValue;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotImplementedException();
+}

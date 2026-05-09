@@ -7,7 +7,7 @@
     <!-- ══════════════════════════════════════════════════════════════════════
          COLORS — Design System
          ══════════════════════════════════════════════════════════════════════ -->
-    
+
     <!-- App surfaces -->
     <Color x:Key="BgApp">#070F12</Color>
     <Color x:Key="BgCard">#003B46</Color>
@@ -26,7 +26,7 @@
     <Color x:Key="BgChipOnFolder">#003B46</Color>
     <Color x:Key="BgChipOnPattern">#2E1A1A</Color>
 
-    <!-- Chunk card states -->
+    <!-- Chunk card states — BUG F FIX: these now match CodeChunk.CardBackgroundColor -->
     <Color x:Key="BgChunkDefault">#070F12</Color>
     <Color x:Key="BgChunkCopied">#1A2E20</Color>
     <Color x:Key="BgChunkSelected">#17213A</Color>
@@ -35,19 +35,19 @@
     <Color x:Key="BgSelectionToolbar">#070F12</Color>
     <Color x:Key="BorderSelectionToolbar">#00A3A9</Color>
 
-    <!-- Primary accent: amber/gold — complements teal -->
+    <!-- Primary accent: amber/gold -->
     <Color x:Key="AccentPrimary">#F59E0B</Color>
     <Color x:Key="AccentPrimaryLight">#FCD34D</Color>
     <Color x:Key="AccentPrimaryBg">#22F59E0B</Color>
     <Color x:Key="AccentPrimaryBorder">#55F59E0B</Color>
 
-    <!-- Secondary accent: teal — used for copy/success feedback and auto-detect -->
+    <!-- Secondary accent: teal -->
     <Color x:Key="AccentSecond">#008C8B</Color>
     <Color x:Key="AccentSecondLight">#00A3A9</Color>
     <Color x:Key="AccentSecondBg">#1A00D4AA</Color>
     <Color x:Key="AccentSecondBorder">#4400D4AA</Color>
 
-    <!-- Legacy green kept for StatNumber and SummaryBorder (success state) -->
+    <!-- Legacy green kept for StatNumber and SummaryBorder -->
     <Color x:Key="AccentGreen">#008C8B</Color>
     <Color x:Key="AccentGreenBg">#008C8B</Color>
     <Color x:Key="AccentGreenBorder">#008C8B</Color>
@@ -58,7 +58,7 @@
     <Color x:Key="TextPrimary">#EEEEFF</Color>
     <Color x:Key="TextSecondary">#00A3A9</Color>
     <Color x:Key="TextMuted">#00A3A9</Color>
-    <Color x:Key="TextDim">#00A3A9</Color>
+    <Color x:Key="TextDim">#006770</Color>
     <Color x:Key="TextGreen">#008C8B</Color>
     <Color x:Key="TextError">#FF7070</Color>
     <Color x:Key="TextAccent">#FCD34D</Color>
@@ -90,7 +90,8 @@
     <!-- ══════════════════════════════════════════════════════════════════════
          CONVERTERS
          ══════════════════════════════════════════════════════════════════════ -->
-    <!-- File-type chip (green when on) -->
+
+    <!-- File-type chip (amber when on) -->
     <conv:BoolToColorConverter x:Key="ChipBorderConv"
                                TrueColor="{StaticResource BorderChipOn}"
                                FalseColor="{StaticResource BorderChipOff}" />
@@ -98,7 +99,7 @@
                                TrueColor="{StaticResource BgChipOn}"
                                FalseColor="{StaticResource BgChipOff}" />
 
-    <!-- Folder chip (violet when excluded) -->
+    <!-- Folder chip (amber border when excluded) -->
     <conv:BoolToColorConverter x:Key="FolderChipBorderConv"
                                TrueColor="{StaticResource BorderChipOnFolder}"
                                FalseColor="{StaticResource BorderChipOff}" />
@@ -119,7 +120,7 @@
                                TrueColor="{StaticResource TextPrimary}"
                                FalseColor="{StaticResource TextMuted}" />
 
-    <!-- Selection indicator -->
+    <!-- Chunk selection indicator (amber) -->
     <conv:BoolToColorConverter x:Key="SelectionDotBgConv"
                                TrueColor="{StaticResource AccentPrimary}"
                                FalseColor="Transparent" />
@@ -127,13 +128,35 @@
                                TrueColor="{StaticResource AccentPrimary}"
                                FalseColor="{StaticResource BorderDefault}" />
 
-    <!-- Share-select indicator -->
+    <!-- Prompt share-select indicator (amber) -->
     <conv:BoolToColorConverter x:Key="ShareSelectDotBgConv"
                                TrueColor="{StaticResource AccentPrimary}"
                                FalseColor="Transparent" />
     <conv:BoolToColorConverter x:Key="ShareSelectDotBorderConv"
                                TrueColor="{StaticResource AccentPrimary}"
                                FalseColor="{StaticResource BorderDefault}" />
+
+    <!--
+        ── Per-chunk file inclusion indicators (teal, distinct from amber chunk-select)
+        Teal dot = file is included in the clipboard payload.
+        Empty circle = file is excluded.
+    -->
+    <conv:BoolToColorConverter x:Key="ChunkFileDotBgConv"
+                               TrueColor="{StaticResource AccentSecond}"
+                               FalseColor="Transparent" />
+    <conv:BoolToColorConverter x:Key="ChunkFileDotBorderConv"
+                               TrueColor="{StaticResource AccentSecond}"
+                               FalseColor="{StaticResource BorderDefault}" />
+
+    <!-- File-name label: bright when included, dim when excluded -->
+    <conv:BoolToColorConverter x:Key="ChunkFileLabelColorConv"
+                               TrueColor="{StaticResource TextPrimary}"
+                               FalseColor="{StaticResource TextDim}" />
+
+    <!-- Strikethrough on excluded file names -->
+    <conv:BoolToTextDecorationsConverter x:Key="ChunkFileDecorationConv"
+                                         TrueValue="None"
+                                         FalseValue="Strikethrough" />
 
     <!-- General utils -->
     <conv:InverseBoolConverter        x:Key="InverseBool" />
@@ -290,12 +313,6 @@
         <Setter Property="LineBreakMode" Value="WordWrap" />
     </Style>
 
-    <!--
-         FILE TYPE CARD SUMMARY
-         Single-line accent-colored label visible when the FILE TYPES card
-         is collapsed. Shows enabled extensions + optional file count,
-         e.g. ".cs  .xaml  .json  ·  47 files"
-    -->
     <Style x:Key="FileTypeSummaryLabel" TargetType="Label">
         <Setter Property="TextColor"     Value="{StaticResource AccentPrimaryLight}" />
         <Setter Property="FontSize"      Value="12" />
@@ -339,19 +356,20 @@
         <Setter Property="MinimumWidthRequest"  Value="44" />
     </Style>
 
+    <!--
+        BUG D FIX: TextColor was {StaticResource BgCard} (#003B46) — virtually
+        invisible on any dark background.  Changed to TextPrimary (#EEEEFF)
+        for high contrast on all card surfaces (dark, teal, amber).
+    -->
     <Style x:Key="SmallIconBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="Transparent" />
-        <Setter Property="TextColor"            Value="{StaticResource BgCard}" />
+        <Setter Property="TextColor"            Value="{StaticResource TextPrimary}" />
         <Setter Property="FontSize"             Value="13" />
         <Setter Property="Padding"              Value="6,0" />
         <Setter Property="MinimumHeightRequest" Value="40" />
         <Setter Property="MinimumWidthRequest"  Value="36" />
     </Style>
 
-    <!--
-         TOGGLE ALL BUTTON
-         Used in chip-filter section headers (File Types, Folders, Patterns).
-    -->
     <Style x:Key="ToggleAllBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource AccentPrimaryBg}" />
         <Setter Property="TextColor"            Value="{StaticResource AccentPrimaryLight}" />
@@ -364,11 +382,6 @@
         <Setter Property="BorderWidth"          Value="1" />
     </Style>
 
-    <!--
-         AUTO-DETECT BUTTON
-         Teal variant of ToggleAllBtn. Shown in the FILE TYPES header only when
-         the entered URL is a GitHub URL.
-    -->
     <Style x:Key="AutoDetectBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource AccentSecondBg}" />
         <Setter Property="TextColor"            Value="{StaticResource AccentSecond}" />
@@ -381,10 +394,6 @@
         <Setter Property="BorderWidth"          Value="1" />
     </Style>
 
-    <!--
-         SLIDER PRESET BUTTONS
-         Small pill buttons above the token slider (4K / 8K / 16K / 32K).
-    -->
     <Style x:Key="SliderPresetBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource BgInput}" />
         <Setter Property="TextColor"            Value="{StaticResource TextSecondary}" />
@@ -462,10 +471,6 @@
         <Setter Property="MinimumHeightRequest" Value="34" />
     </Style>
 
-    <!--
-         RESET PROMPTS BUTTON
-         Destructive secondary action — red border, dark background.
-    -->
     <Style x:Key="ResetPromptsBtn" TargetType="Button">
         <Setter Property="BackgroundColor"      Value="{StaticResource BgCard}" />
         <Setter Property="TextColor"            Value="{StaticResource AccentRed}" />
@@ -475,6 +480,23 @@
         <Setter Property="MinimumHeightRequest" Value="42" />
         <Setter Property="Padding"              Value="12,0" />
         <Setter Property="BorderColor"          Value="{StaticResource AccentRed}" />
+        <Setter Property="BorderWidth"          Value="1" />
+    </Style>
+
+    <!--
+        ── PER-CHUNK FILE TOGGLE BUTTONS (All / None in the preview panel)
+        Teal-bordered, compact — distinct from the amber ToggleAllBtn used
+        at the section level so users can tell them apart at a glance.
+    -->
+    <Style x:Key="SmallToggleChunkFilesBtn" TargetType="Button">
+        <Setter Property="BackgroundColor"      Value="{StaticResource AccentSecondBg}" />
+        <Setter Property="TextColor"            Value="{StaticResource AccentSecondLight}" />
+        <Setter Property="FontSize"             Value="10" />
+        <Setter Property="FontAttributes"       Value="Bold" />
+        <Setter Property="CornerRadius"         Value="6" />
+        <Setter Property="Padding"              Value="10,3" />
+        <Setter Property="MinimumHeightRequest" Value="26" />
+        <Setter Property="BorderColor"          Value="{StaticResource AccentSecondBorder}" />
         <Setter Property="BorderWidth"          Value="1" />
     </Style>
 
@@ -556,7 +578,7 @@
         <Setter Property="Stroke"          Value="{StaticResource BorderSelectionToolbar}" />
         <Setter Property="StrokeShape"     Value="RoundRectangle 12" />
         <Setter Property="Padding"         Value="14,10" />
-        <Setter Property="Margin"          Value="0,0,0,10" />
+        <Setter Property="Margin"          Value="0,0,0,0" />
     </Style>
 
     <Style x:Key="SelectionCountLabel" TargetType="Label">
@@ -577,7 +599,7 @@
     <Style x:Key="PreviewBorder" TargetType="Border">
         <Setter Property="BackgroundColor" Value="{StaticResource BgPreview}" />
         <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,14,14" />
+        <Setter Property="StrokeShape"     Value="RoundRectangle 0,0,12,12" />
         <Setter Property="Padding"         Value="14,10,14,14" />
     </Style>
 
@@ -588,10 +610,20 @@
         <Setter Property="FontFamily"    Value="Courier New, Courier, monospace" />
     </Style>
 
+    <!--
+        ── PER-FILE ROW STYLES in the interactive preview panel
+    -->
+
+    <!-- Token count badge next to each file name -->
+    <Style x:Key="ChunkFileTokenLabel" TargetType="Label">
+        <Setter Property="TextColor"      Value="{StaticResource TextDim}" />
+        <Setter Property="FontSize"       Value="10" />
+        <Setter Property="FontFamily"     Value="OpenSansRegular" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
     <!-- ══════════════════════════════════════════════════════════════════════
          PROMPT FULL-TEXT PREVIEW PANEL
-         Mirrors PreviewBorder / PreviewLabel but slightly larger text so
-         the prompt prose is comfortable to read.
          ══════════════════════════════════════════════════════════════════════ -->
     <Style x:Key="PromptPreviewBorder" TargetType="Border">
         <Setter Property="BackgroundColor" Value="{StaticResource BgPromptEdit}" />
@@ -657,8 +689,15 @@
         <Setter Property="Margin"          Value="0,0,0,8" />
     </Style>
 
+    <!--
+        BUG C FIX: Removed trailing space from resource key ("BgCard " → "TextPrimary").
+        The original key had a space inside the braces causing a potential resource-not-found
+        crash on strict XML parsers.  Color also changed: BgCard (#003B46, near-black) is
+        unreadable as text on the teal/amber card backgrounds. TextPrimary (#EEEEFF) works
+        on all three card states (copied/selected/default).
+    -->
     <Style x:Key="PromptTitleLabel" TargetType="Label">
-        <Setter Property="TextColor"      Value="{StaticResource BgCard }" />
+        <Setter Property="TextColor"      Value="{StaticResource TextPrimary}" />
         <Setter Property="FontSize"       Value="14" />
         <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="FontFamily"     Value="OpenSansSemibold" />
